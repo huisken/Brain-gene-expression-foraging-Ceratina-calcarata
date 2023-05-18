@@ -1,0 +1,2788 @@
+---
+title: "Untitled"
+output: word_document
+editor_options: 
+  chunk_output_type: console
+---
+
+Working directory
+
+```{r setup, include=FALSE}
+
+knitr::opts_knit$set(root.dir="/Volumes/Untitled/jessehuisken/Documents/Academic/Complete/Masters/Removal/")
+#setwd("~/jessehuisken/Documents/Academic/Current/Masters/CCalcarataObservationNests/")
+#setwd("/Users/jessehuisken/Documents/Current/Masters/Removal/")
+setwd("/Volumes/Untitled/jessehuisken/Documents/Academic/Complete/Masters/Removal/")
+#setwd("/Volumes/Untitled/jessehuisken/Documents/Current/Masters/Removal/")
+getwd()
+
+```
+
+Load packages:
+
+```{r load, echo="false"}
+
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+#install.packages("Hypergeometic")
+#    install.packages("BiocManager")
+#BiocManager::install(version = "3.14")
+#install.packages("BiocManager")
+#BiocManager::install(c("DESeq2"))
+#BiocManager::install("apeglm")
+#BiocManager::install("topGO")
+#BiocManager::install("rtracklayer")
+#BiocManager::install("ALL")
+#BiocManager::install("Rgraphviz")
+#BiocManager::install("GO.db")
+#BiocManager::install("phyloseq")
+#BiocManager::install("igraph")
+#BiocManager::install("RRHO")
+#BiocManager::install("mygene")
+#install.packages("gplots")
+#install.packages("rld")
+#install.packages("arsenal")
+#install.packages("calibrate")
+#install.packages("gridBase")
+#install.packages("ggrepel")
+#devtools::install_github("gaospecial/ggVennDiagram")
+#devtools::install_github("yanlinlin82/ggvenn")
+#install.packages("VennDiagram")
+
+
+library(RColorBrewer)
+library(tidyverse)
+library(DESeq2)
+library(pheatmap)
+library(pheatmap)
+library(gplots)
+library(rld)
+library(arsenal)
+library(topGO)
+library(rtracklayer)
+library(ALL)
+library(WGCNA)
+library(calibrate)
+library(gridBase)
+library(gridExtra)
+library(GO.db)
+library(WGCNA)
+library(phyloseq)
+library(igraph)
+library(RRHO)
+data(geneList)
+data(ALL)
+library(genefilter)
+library(ggrepel)
+library(mygene)
+library(biomaRt)
+library(dplyr)
+library(ggvenn)
+library("ggVennDiagram")
+
+
+
+```
+
+Import files
+
+```{r import, echo=F}
+gtf <- rtracklayer::import('PO1409_Ceratina_calcarata.annotation.gff')
+head(gtf)
+
+
+#Import sample table
+samples <- read.table("counts/samples_final.txt", head = T, sep="\t")
+head(samples)
+
+traitData <- read.table("counts/samples_WGCNA.txt", head = T, sep="\t")
+head(traitData)
+
+```
+
+DESeq2 analysis
+
+```{r}
+
+#Read in samples
+dds <- DESeqDataSetFromHTSeqCount(sampleTable = samples, directory = "counts", design = ~ condition)
+head(dds)
+
+dds <- DESeq(dds)   
+
+dds <- estimateSizeFactors(dds)
+dds <- nbinomWaldTest(dds)
+dds
+
+res <- results(dds, alpha = 0.05)
+summary(res)
+resOrdered <- res[order(res$pvalue),]
+
+normalized_counts <- counts(dds, normalized=TRUE)
+countdata <- counts(dds)
+
+#Export normalized read data 
+write.csv(normalized_counts, file="normalized_counts.csv", row.names=TRUE)
+
+M_DT <- results(dds, contrast=c("condition", "mc","dt"))
+write.csv(M_DT, "DEGlists/M_DT.csv", row.names=TRUE)
+M_DT_sig <- subset(M_DT, padj <= 0.05)
+M_DT_sig$ID <- rownames(M_DT_sig)
+
+
+M_DC <- results(dds, contrast=c("condition", "mc","dc"))
+write.csv(M_DC, "DEGlists/M_DC.csv", row.names=TRUE)
+M_DC_sig <- subset(M_DC, padj <= 0.05)
+M_DC_sig$ID <- rownames(M_DC_sig)
+
+M_RC <- results(dds, contrast=c("condition", "mc","rc"))
+write.csv(M_RC, "DEGlists/M_RC.csv", row.names=TRUE)
+M_RC_sig <- subset(M_RC, padj <= 0.05)
+M_RC_sig$ID <- rownames(M_RC_sig)
+
+RC_DT <- results(dds, contrast=c("condition", "rc","dt"))
+write.csv(RC_DT, "DEGlists/RC_DT.csv", row.names=TRUE)
+RC_DT_sig <- subset(RC_DT, padj <= 0.05)
+RC_DT_sig$ID <- rownames(RC_DT_sig)
+
+DC_DT <- results(dds, contrast=c("condition", "dc","dt"))
+write.csv(DC_DT, "DEGlists/DC_DT.csv", row.names=TRUE)
+DC_DT_sig <- subset(DC_DT, padj <= 0.05)
+DC_DT_sig$ID <- rownames(DC_DT_sig)
+
+DC_RC <- results(dds, contrast=c("condition", "dc","rc"))
+write.csv(DC_RC, "DEGlists/DC_RC.csv", row.names=TRUE)
+DC_RC_sig <- subset(DC_RC, padj <= 0.05)
+DC_RC_sig$ID <- rownames(DC_RC_sig)
+
+
+#Make list of all DEGs (not only significant)
+M_DTAll <- as.data.frame(M_DT)
+M_DCAll <- as.data.frame(M_DC)
+M_RCAll <- as.data.frame(M_RC)
+RC_DTAll <- as.data.frame(RC_DT)
+DC_DTAll <- as.data.frame(DC_DT)
+DC_RCAll <- as.data.frame(DC_RC)
+
+M_DTAll$contrast <- "M_DT"
+M_DCAll$contrast <- "M_DC"
+M_RCAll$contrast <- "M_RC"
+RC_DTAll$contrast <- "RC_DT"
+DC_DTAll$contrast <- "DC_DT"
+DC_RCAll$contrast <- "DC_RC"
+DEGs <- rbind(M_DTAll, M_DCAll, M_RCAll, RC_DTAll, DC_DTAll, DC_RCAll)
+DEGs$ID <- rownames(DEGs)
+head(DEGs)
+write_csv(DEGs, "DEGlists/ForagingSocial_AllGenes_Contrasts-2021.csv")
+
+#Signficant genes
+M_DT_sig$contrast <- "M_DT"
+M_DC_sig$contrast <- "M_DC"
+M_RC_sig$contrast <- "M_RC"
+RC_DT_sig$contrast <- "RC_DT"
+DC_DT_sig$contrast <- "DC_DT"
+DC_RC_sig$contrast <- "DC_RC"
+
+M_DT_sig<- merge(M_DT_sig, gtf)
+M_DC_sig<- merge(M_DC_sig, gtf)
+M_RC_sig<- merge(M_RC_sig, gtf)
+RC_DT_sig<- merge(RC_DT_sig, gtf)
+DC_DT_sig<- merge(DC_DT_sig, gtf)
+DC_RC_sig<- merge(DC_RC_sig, gtf)
+
+DEGsig <- rbind(M_DT_sig, M_DC_sig, M_RC_sig, RC_DT_sig, DC_DT_sig, DC_RC_sig)
+
+DEGsig <- merge(as.data.frame(DEGsig), gtf)
+
+write.csv(DEGsig, "DEGlists/DEGcontrasts.csv", row.names=TRUE)
+
+DEGsig_notes  <- read.csv("DEGlists/DEGs_Contrast_Notes.csv")
+DEGsig_notes <- merge(DEGsig_notes, gtf)
+write.csv(DEGsig_notes, "DEGlists/DEGs_Contrast_Notes.csv")
+
+DEGsig <- as.data.frame(DEGsig)
+DEGsig <- distinct(DEGsig, ID, .keep_all = TRUE)
+DEGsig_list <- DEGsig$ID
+
+write.table(DEGsig, "DEGlists/DEGsig.txt", sep="\t")
+
+DEGsig_up <- subset(DEGsig, log2FoldChange > 0)
+length(DEGsig_up$padj)
+
+#Numbers of up regulated DEGs by phenotype
+#Make lists of up regulated
+DT_RC_sig <- RC_DT_sig
+DT_RC_sig$log2FoldChange <- RC_DT_sig$log2FoldChange*-1
+DT_RC_sig$stat <- RC_DT_sig$stat*-1
+RC_DEGs <- rbind(as.data.frame(M_RC_sig), as.data.frame(DT_RC_sig), as.data.frame(DC_RC_sig)) 
+RC_DEGs$log2FoldChange <- RC_DEGs$log2FoldChange*-1
+RC_DEGs$stat <- RC_DEGs$stat*-1
+length(RC_DEGs$padj)
+length(unique(RC_DEGs$ID))
+RC_DEGs_up <- subset(RC_DEGs, log2FoldChange > 0)
+length(RC_DEGs_up$ID)
+RC_DEGs_up  <- distinct(RC_DEGs_up, ID, .keep_all = TRUE)
+length(RC_DEGs_up$ID)
+
+M_DEGs <- rbind(as.data.frame(M_DT_sig), as.data.frame(M_DC_sig), as.data.frame(M_RC_sig))
+length(M_DEGs$padj)
+length(unique(M_DEGs$ID))
+M_DEGs_up <- subset(M_DEGs, log2FoldChange > 0)
+length(M_DEGs_up$padj)
+M_DEGs_up  <-distinct(M_DEGs_up, ID, .keep_all = TRUE)
+length(M_DEGs_up$padj)
+
+DT_DEGs <- rbind(as.data.frame(M_DT_sig), as.data.frame(RC_DT_sig), as.data.frame(DC_DT_sig))
+DT_DEGs$log2FoldChange <- DT_DEGs$log2FoldChange*-1
+DT_DEGs$stat <- DT_DEGs$stat*-1
+length(DT_DEGs$padj)
+length(unique(DT_DEGs$ID))
+DT_DEGs_up <- subset(DT_DEGs, log2FoldChange > 0)
+length(DT_DEGs_up$padj)
+DT_DEGs_up <-distinct(DT_DEGs_up, ID, .keep_all = TRUE)
+length(DT_DEGs_up$padj)
+
+DC_M_sig <- M_DC_sig
+DC_M_sig$log2FoldChange <- M_DC_sig$log2FoldChange*-1
+DC_M_sig$stat <- M_DC_sig$stat*-1
+DC_DEGs <- rbind(as.data.frame(DC_M_sig), as.data.frame(DC_DT_sig), as.data.frame(DC_RC_sig))
+length(DC_DEGs$padj)
+length(unique(DC_DEGs$ID))
+DC_DEGs_up <- subset(DC_DEGs, log2FoldChange > 0)
+length(DC_DEGs_up$padj)
+DC_DEGs_up  <-distinct(DC_DEGs_up, ID, .keep_all = TRUE)
+length(DC_DEGs_up$padj)
+
+#Unique up regulated genes
+#In regular daughters
+length(setdiff(RC_DEGs_up$ID, rbind(M_DEGs_up, DT_DEGs_up, DC_DEGs_up)$ID))
+RC_DEGs_up_uni <- setdiff(RC_DEGs_up$ID, rbind(M_DEGs_up, DT_DEGs_up, DC_DEGs_up)$ID)
+#Unique to DEDs and regular
+length(setdiff(intersect(RC_DEGs_up$ID, DC_DEGs_up$ID), rbind(DT_DEGs_up,M_DEGs_up)$ID))
+#Unique to DEDs and regular
+length(setdiff(intersect(RC_DEGs_up$ID, DT_DEGs_up$ID), rbind(DC_DEGs_up,M_DEGs_up)$ID))
+#Unique to DEDs and regular
+length(setdiff(intersect(RC_DEGs_up$ID, M_DEGs_up$ID), rbind(DC_DEGs_up,DT_DEGs_up)$ID))
+#Unique to both DEDs, orphaned DEDs and regular
+length(setdiff(intersect(intersect(RC_DEGs_up$ID, DC_DEGs_up$ID), DT_DEGs_up$ID), M_DEGs_up$ID))
+#Unique to both orphaned DEDs, mothers and regular
+length(setdiff(intersect(intersect(RC_DEGs_up$ID, M_DEGs_up$ID), DT_DEGs_up$ID), DC_DEGs_up$ID))
+#Unique to DEDs, mothers and regular
+length(setdiff(intersect(intersect(RC_DEGs_up$ID, M_DEGs_up$ID), DC_DEGs_up$ID), DT_DEGs_up$ID))
+
+#Shared with mothers
+length(intersect(RC_DEGs_up$ID, M_DEGs_up$ID))
+#Shared with DEDs
+length(intersect(RC_DEGs_up$ID, DC_DEGs_up$ID))
+#Shared with orphaned DEDs
+length(intersect(RC_DEGs_up$ID, DT_DEGs_up$ID))
+#Shared with both DEDs
+length(intersect(RC_DEGs_up$ID, rbind(DT_DEGs_up, DC_DEGs_up)$ID))
+#Shared with orphaned DEDs and mothers
+length(intersect(RC_DEGs_up$ID, rbind(DT_DEGs_up, M_DEGs_up)$ID))
+#Shared with DEDs and mothers
+length(intersect(RC_DEGs_up$ID, rbind(DC_DEGs_up, M_DEGs_up)$ID))
+#Shared with all 
+length(intersect(RC_DEGs_up$ID, rbind(M_DEGs_up, DT_DEGs_up, DC_DEGs_up)$ID))
+
+
+#In mothers
+#Unique
+length(setdiff(M_DEGs_up$ID, rbind(RC_DEGs_up, DT_DEGs_up, DC_DEGs_up)$ID))
+M_DEGs_up_uni <- setdiff(M_DEGs_up$ID, rbind(RC_DEGs_up, DT_DEGs_up, DC_DEGs_up)$ID)
+
+#Unique to DEDs and mothers
+length(setdiff(intersect(M_DEGs_up$ID, DC_DEGs_up$ID), rbind(DT_DEGs_up,RC_DEGs_up)$ID))
+#Unique to orphaned DEDs and mothers
+length(setdiff(intersect(M_DEGs_up$ID, DT_DEGs_up$ID), rbind(DT_DEGs_up,RC_DEGs_up)$ID))
+#Unique to DEDs, orphaned DEDs and motheres
+length(setdiff(intersect(intersect(DC_DEGs_up$ID, M_DEGs_up$ID), DT_DEGs_up$ID), RC_DEGs_up$ID))
+
+#Shared with orphaned DEDs
+length(intersect(M_DEGs_up$ID, DT_DEGs_up$ID))
+#Shared with DEDs
+length(intersect(M_DEGs_up$ID, DC_DEGs_up$ID))
+#Shared with both DEDs
+length(intersect(M_DEGs_up$ID, rbind(DC_DEGs_up, DT_DEGs_up)$ID))
+
+#In orphaned DEDs
+#Unique
+length(setdiff(DT_DEGs_up$ID, rbind(RC_DEGs_up, M_DEGs_up, DC_DEGs_up)$ID))
+DT_DEGs_up_uni <- setdiff(DT_DEGs_up$ID, rbind(RC_DEGs_up, M_DEGs_up, DC_DEGs_up)$ID)
+
+#shared with orphaned
+length(intersect(DT_DEGs_up$ID, DC_DEGs_up$ID))
+
+#In control DEDs
+#Unique
+length(setdiff(DC_DEGs_up$ID, rbind(DT_DEGs_up, M_DEGs_up, RC_DEGs_up)$ID))
+DC_DEGs_up_uni <- setdiff(DC_DEGs_up$ID, rbind(DT_DEGs_up, M_DEGs_up, RC_DEGs_up)$ID)
+
+#Unique to DEDs and orphaned DEDS
+length(setdiff(intersect(DT_DEGs_up$ID, DC_DEGs_up$ID), rbind(M_DEGs_up,RC_DEGs_up)$ID))
+
+M_DEGs_up_uni <- enframe(M_DEGs_up_uni, value = "ID")
+RC_DEGs_up_uni <- enframe(RC_DEGs_up_uni, value = "ID")
+DT_DEGs_up_uni <- enframe(DT_DEGs_up_uni, value = "ID")
+DC_DEGs_up_uni <- enframe(DC_DEGs_up_uni, value = "ID")
+
+M_DEGs_up_uni$condition <- "M"
+RC_DEGs_up_uni$condition <- "RC"
+DT_DEGs_up_uni$condition <- "DT"
+DC_DEGs_up_uni$condition <- "DC"
+
+DEGunique <- rbind(M_DEGs_up_uni, DT_DEGs_up_uni, DC_DEGs_up_uni, RC_DEGs_up_uni)
+
+write.csv(DEGunique, "DEGlists/DEGunique.csv", row.names=TRUE)
+
+par(mfrow=c(1,1))
+
+library(calibrate)
+
+res$Gene <- rownames(res)
+
+labs<-res$Gene["Ccalc.v3.04501"]
+
+# Make a basic volcano plot
+with(res, plot(log2FoldChange, -log10(pvalue), pch=20, main="Volcano plot", xlim=c(-3,3)))
+
+# Add colored points: blue if padj<0.01, red if log2FC>1 and padj<0.05)
+with(subset(res, padj<.01 ), points(log2FoldChange, -log10(pvalue), pch=20, col="blue"))
+with(subset(res, padj<.01 & abs(log2FoldChange)>2), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+with(subset(res, Gene == "Ccalc.v3.04501"), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=.8))
+
+alpha <- 0.05 # Threshold on the adjusted p-value
+cols <- densCols(res$log2FoldChange, -log10(res$pvalue))
+plot(res$log2FoldChange, -log10(res$padj), col=cols, panel.first=grid(),
+     main="Differntially Expressed Genes", xlab="Effect size: log2(fold-change)", ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.6)
+abline(v=0)
+abline(v=c(-1,1), col="brown")
+abline(h=-log10(alpha), col="brown")
+
+alpha <- 0.05 # Threshold on the adjusted p-value
+cols <- densCols(res$log2FoldChange, -log10(res$pvalue))
+plot(res$log2FoldChange, -log10(res$padj), col=cols, panel.first=grid(),
+     main="Differntially Expressed Genes", xlab="Effect size: log2(fold-change)", ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.6)
+abline(v=0)
+abline(v=c(-1,1), col="brown")
+abline(h=-log10(alpha), col="brown")
+
+gn.selected <- abs(res$log2FoldChange) > 2.5 & res$padj < alpha 
+text(res$log2FoldChange[gn.selected],
+     -log10(res$padj)[gn.selected],
+     lab=rownames(res)[gn.selected ], cex=0.6)
+
+
+#Red black
+par(mar=c(5,5,5,5), cex=1.0, cex.main=1.4, cex.axis=1.4, cex.lab=1.4)
+topT <- as.data.frame(res)
+
+#Adjusted P values (FDR Q values)
+with(topT, plot(log2FoldChange, -log10(padj), pch=20, main="Volcano plot", cex=1.0, xlab=bquote(~Log[2]~fold~change), ylab=bquote(~-log[10]~Q~value)))
+
+with(subset(topT, padj<0.05 & abs(log2FoldChange)>2), points(log2FoldChange, -log10(padj), pch=20, col="red", cex=0.5))
+
+#with(subset(topT, padj<0.05 & abs(log2FoldChange)>2), text(log2FoldChange, -log10(padj), labels=subset(rownames(topT), topT$padj<0.05 & abs(topT$log2FoldChange)>2), cex=0.8, pos=3))
+
+#Add lines for absolute FC>2 and P-value cut-off at FDR Q<0.05
+abline(v=0, col="black", lty=3, lwd=1.0)
+abline(v=-2, col="black", lty=4, lwd=2.0)
+abline(v=2, col="black", lty=4, lwd=2.0)
+abline(h=-log10(max(topT$pvalue[topT$padj<0.05], na.rm=TRUE)), col="black", lty=4, lwd=2.0)
+
+#Heatmap of all DEGs
+vsd <- vst(dds, blind=FALSE)
+#rld <- rlog(dds, blind=FALSE)
+map <- assay(vsd)[DEGsig_list,]
+map <- map - rowMeans(map)
+anno <- as.data.frame(colData(dds)[c("condition")])
+DEGheatmap_all <- pheatmap(map, annotation_col = anno)
+
+#Heatmap of top 50 DEGs
+#sorting
+DEGsig <- DEGsig[order(DEGsig$padj),]
+top50DEGsig <- DEGsig_list[1:50]
+vsd <- vst(dds, blind=FALSE)
+#rld <- rlog(dds, blind=FALSE)
+map <- assay(vsd)[top50DEGsig,]
+map <- map - rowMeans(map)
+anno <- as.data.frame(colData(dds)[c("condition")])
+DEGheatmap <- pheatmap(map, annotation_col = anno)
+#png(file = DEGheatmap_all)
+
+#Sort by fold change
+DEGsig <- DEGsig[order(DEGsig$log2FoldChange),]
+DEGsig_fold <- rownames(DEGsig)
+DEGsig_fold <- unique(DEGsig_fold)
+
+DEGsig_fold <- DEGsig_fold[1:50]
+vsd <- vst(dds, blind=FALSE)
+#rld <- rlog(dds, blind=FALSE)
+map <- assay(vsd)[DEGsig_fold,]
+map <- map - rowMeans(map)
+anno <- as.data.frame(colData(dds)[c("condition")])
+DEGheatmap <- pheatmap(map, annotation_col = anno)
+
+vsd <- vst(dds, blind=FALSE)
+pcaPlot <- plotPCA(vsd, intgroup=c("condition"), ntop=100)
+pcaPlot
+write_csv(as.data.frame(pcaPlot$data), "pca1.csv")
+
+rv <-rowVars(assay(vsd))
+select <-order(rv, decreasing=TRUE)[seq_len(min(900, length(rv)))]
+pca <- prcomp(t(assay(vsd)[select,]), scale = TRUE)
+#pca.eigen <- eigen(pca)
+summary(pca)
+pcaPlot$data
+
+#Make venn diagram
+
+display_venn <- function(x, ...){
+  library(VennDiagram)
+  grid.newpage()
+  venn_object <- venn.diagram(x, filename = NULL, ...)
+  grid.draw(venn_object)
+}
+
+display_venn(x, category.names = c("Mothers", "DEDs", "DEDs wo mothers", "Regular"), fill = c("#999999", "#E69F00", "#56B4E9", "#009E73"))
+
+display_venn(
+        x,
+        category.names = c("M" , "RC" , "DT", "DC"),
+        # Circles
+        lwd = 2,
+        lty = 'blank',
+        fill = c("#999999", "#E69F00", "#56B4E9", "#009E73"),
+        # Numbers
+        cex = .9,
+        fontface = "italic",
+        # Set names
+        cat.cex = 1,
+        cat.fontface = "bold",
+        cat.default.pos = "outer",
+        cat.dist = c(0.055, 0.055, 0.1, 0.1)
+)
+
+#Reproduction vs non reproduction
+dds_repro <- DESeqDataSetFromHTSeqCount(sampleTable = samples, directory = "counts", design = ~ reproductive)
+head(dds_repro)
+#Filter low counts
+#nrow(dds_repro)
+#dds_repro <- rowSums(cpm(dds_repro) > 0.5) >= 2
+#nrow(dds_repro)
+#Collapse technical replicates for FW043-R
+#dds_repro <- collapseReplicates(dds_repro, dds_repro$sample, dds_repro$run)
+dds_repro <- DESeq(dds_repro)   
+
+dds_repro <- estimateSizeFactors(dds_repro)
+#dds_repro <- estimateDispersions(dds_repro)
+dds_repro <- nbinomWaldTest(dds_repro)
+dds_repro
+
+res_repro <- results(dds_repro, alpha = 0.05)
+summary(res_repro)
+resOrdered_repro <- res_repro[order(res_repro$pvalue),]
+
+normalized_counts_repro <- counts(dds_repro, normalized=TRUE)
+countdata <- counts(dds_repro)
+#Export normalized read data 
+write.csv(normalized_counts_repro, file="normalized_counts_repro.csv", row.names=TRUE)
+#DESeq2::plotMA(res, ylim=c(-2,2))
+#resultsNames(dds_repro)
+
+repro <- results(dds_repro, contrast=c("reproductive", "y","n"))
+head(repro)
+repro$ID <- rownames(repro)
+repro <- merge(repro, gtf)
+write.csv(repro, "DEGlists/repro.csv")
+
+repro_sig <- subset(repro, padj <= 0.05)
+repro_sig$ID <- rownames(repro_sig)
+head(repro_sig)
+write.csv(repro_sig, "DEGlists/repro_sig.csv")
+
+```
+
+WGCNA analysis
+
+```{R}
+
+options(stringsAsFactors = FALSE);
+#Read in the bee gene expression data set
+beeData = read.csv("normalized_counts.csv");
+# Take a quick look at what is in the data set:
+dim(beeData);
+names(beeData);
+
+datExpr0 = as.data.frame(t(beeData[, -c(1)]));
+names(datExpr0) = beeData[,1];
+rownames(datExpr0) = names(beeData)[-c(1)];
+
+#Check read numbers
+gsg = goodSamplesGenes(datExpr0, verbose = 3);
+gsg$allOK
+
+
+#Scrub low counts
+if (!gsg$allOK)
+{
+  # Optionally, print the gene and sample names that were removed:
+  if (sum(!gsg$goodGenes)>0) 
+    printFlush(paste("Removing genes:", paste(names(datExpr0)[!gsg$goodGenes], collapse = ", ")));
+  if (sum(!gsg$goodSamples)>0) 
+    printFlush(paste("Removing samples:", paste(rownames(datExpr0)[!gsg$goodSamples], collapse = ", ")));
+  # Remove the offending genes and samples from the data:
+  datExpr0 = datExpr0[gsg$goodSamples, gsg$goodGenes]
+}
+
+#Find outliers
+sampleTree = hclust(dist(datExpr0), method = "average");
+# Plot the sample tree: Open a graphic output window of size 12 by 9 inches
+# The user should change the dimensions if the window is too large or too small.
+sizeGrWindow(12,9)
+#pdf(file = "Plots/sampleClustering.pdf", width = 12, height = 9);
+par(cex = 0.6);
+par(mar = c(0,4,2,0))
+plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5, 
+     cex.axis = 1.5, cex.main = 2)
+
+# Plot a line to show the cut 
+# Determine cluster under the line
+#table(clust)
+
+#Keep all samples, no obvious outliers
+datExpr = datExpr0
+nGenes = ncol(datExpr)
+nSamples = nrow(datExpr)
+
+#contains phenotype info and sample names
+dim(traitData)
+names(traitData)
+
+# remove columns that hold information we do not need.
+allTraits = dplyr::select(traitData, -FileName)
+
+testSamples = rownames(datExpr);
+traitRows = match(testSamples, allTraits$SampleName); 
+datTraits = allTraits[traitRows, -1];
+rownames(datTraits) = allTraits[traitRows, 1];
+rownames(datTraits)
+collectGarbage()
+
+#Cluster samples with expression data
+sampleTree2 = hclust(dist(datExpr), method = "average")
+traitColors = numbers2colors(colours)
+traitColors = numbers2colors(datTraits, signed = FALSE);
+# Plot the sample dendrogram and the colors underneath.
+plotDendroAndColors(sampleTree2, traitColors,
+                    groupLabels = names(datTraits), 
+                    main = "Trait Heatmap")
+
+save(datExpr, datTraits, file = "Removal_Part1Data.RData")
+
+options(stringsAsFactors = FALSE);
+
+lnames = load(file = "Removal_Part1Data.RData");
+#The variable lnames contains the names of loaded variables.
+
+lnames
+
+powers = c(c(1:10), seq(from = 12, to=30, by=2))
+# Call the network topology analysis function
+sft = pickSoftThreshold(datExpr, powerVector = powers, verbose = 5)
+# Plot the results:
+sizeGrWindow(9, 5)
+par(mfrow = c(1,2));
+cex1 = 0.9;
+# Scale-free topology fit index as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     xlab="Soft Threshold (power)",ylab="Scale Free Topology Model Fit,signed R^2",type="n",
+     main = paste("Scale independence"));
+text(sft$fitIndices[,1], -sign(sft$fitIndices[,3])*sft$fitIndices[,2],
+     labels=powers,cex=cex1,col="red");
+abline(h=0.8,col="red")
+
+# Mean connectivity as a function of the soft-thresholding power
+plot(sft$fitIndices[,1], sft$fitIndices[,5],
+     xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
+     main = paste("Mean connectivity"))
+text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
+
+#Define modules for each trait and plot p-values by membership
+net = blockwiseModules(datExpr, power = 6, #power is defined be previous analysis
+                       TOMType = "unsigned", minModuleSize = 30, 
+                       reassignThreshold = 0, mergeCutHeight = 0.20,
+                       numericLabels = TRUE, pamRespectsDendro = FALSE,
+                       saveTOMs = TRUE,
+                       saveTOMFileBase = "TomFileBase", 
+                       verbose = 3)
+
+# open a graphics window
+sizeGrWindow(12, 9)
+# Convert labels to colors for plotting
+mergedColors = labels2colors(net$colors)
+
+# Plot the dendrogram and the module colors underneath
+plotDendroAndColors(net$dendrograms[[1]], mergedColors[net$blockGenes[[1]]],
+                    "Modules",
+                    dendroLabels = FALSE, hang = 0.03,
+                    addGuide = TRUE, guideHang = 0.05)
+
+moduleLabels = net$colors
+moduleColors = labels2colors(net$colors)
+MEs = net$MEs;
+geneTree = net$dendrograms[[1]];
+save(MEs, moduleLabels, moduleColors, geneTree, 
+     file = "ProjectName_s6_min30_cut20_Part2Data.RData")
+
+# The following setting is important, do not omit.
+options(stringsAsFactors = FALSE);
+# Load the expression and trait data saved in the first part
+lnames = load(file = "ProjectName_Part1Data.RData");
+#The variable lnames contains the names of loaded variables.
+lnames
+# Load network data saved in the second part.
+lnames = load(file = "ProjectName_s4_min30_cut20_Part2Data.RData");
+lnames
+
+# Recalculate MEs with color labels
+MEs0 = moduleEigengenes(datExpr, moduleColors)$eigengenes
+MEs = orderMEs(MEs0)
+moduleTraitCor = cor(MEs, datTraits, use = "p");
+moduleTraitPvalue = corPvalueStudent(moduleTraitCor, nSamples);
+
+sizeGrWindow(10,10)
+# Will display correlations and their p-values
+textMatrix =  paste(signif(moduleTraitCor, 2), "\n(",
+                   signif(moduleTraitPvalue, 1), ")", sep = "");
+#dim(textMatrix) = dim(moduleTraitCor)
+par(mar = c(5.1, 10.1, 4.1, 2.1));
+# Display the correlation values within a heatmap plot
+labeledHeatmap(Matrix = moduleTraitCor,
+               xLabels = names(datTraits),
+               yLabels = names(MEs),
+               ySymbols = names(MEs),
+               colorLabels = TRUE,
+               colors = greenWhiteRed(50),
+               textMatrix = textMatrix,
+               setStdMargins = FALSE,
+               cex.text = 0.3,
+               zlim = c(-1,1),
+               main = paste("Module-trait relationships"))
+
+#Annotations
+annot <- read.table(file = "AnnotationWGCNA.txt", head = F, sep="\t", fill = TRUE);
+annot <- as.data.frame(annot)
+dim(annot)
+annot <- dplyr::rename(annot, ID = V1, Note = V2, Scaffold = V3, Source = V4, Feature = V5, Start = V6, End = V7, Score = V8, Strand = V9, Phase = V10)
+names(annot)
+probes = names(datExpr)
+probes2annot = match(probes, annot$ID)
+# The following is the number or probes without annotation:
+sum(is.na(probes2annot))
+# Should return 0.
+
+
+############# DED treatment analysis ################ 
+#Define variable DED treatment (removal) and check modules with highest association
+
+DEDtreatment = as.data.frame(datTraits$DED.treatment);
+names(DEDtreatment) = "DED.treatment"
+# names (colors) of the modules
+modNames = substring(names(MEs), 3)
+
+geneModuleMembership = as.data.frame(cor(datExpr, MEs, use = "p"));
+MMPvalue = as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples));
+
+names(geneModuleMembership) = paste("MM", modNames, sep="");
+names(MMPvalue) = paste("p.MM", modNames, sep="");
+
+geneTraitSignificance = as.data.frame(cor(datExpr, DEDtreatment, use = "p"));
+GSPvalue = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples));
+
+names(geneTraitSignificance) = paste("GS.", names(DEDtreatment), sep="");
+names(GSPvalue) = paste("p.GS.", names(DEDtreatment), sep="");
+
+# Create the starting data frame
+geneInfo0 = data.frame(Genes = probes,
+                       geneSymbol = annot$Note[probes2annot],
+                       moduleColor = moduleColors,
+                       geneTraitSignificance,
+                       GSPvalue)
+#                       LocusLinkID = annot$LocusLinkID[probes2annot],
+
+# Order modules by their significance for weight
+modOrder = order(-abs(cor(MEs, DEDtreatment, use = "p")));
+# Add module membership information in the chosen order
+for (mod in 1:ncol(geneModuleMembership))
+{
+  oldNames = names(geneInfo0)
+  geneInfo0 = data.frame(geneInfo0, geneModuleMembership[, modOrder[mod]], 
+                         MMPvalue[, modOrder[mod]]);
+  names(geneInfo0) = c(oldNames, paste("MM.", modNames[modOrder[mod]], sep=""),
+                       paste("p.MM.", modNames[modOrder[mod]], sep=""))
+}
+# Order the genes in the geneInfo variable first by module color, then by geneTraitSignificance
+geneOrder = order(geneInfo0$moduleColor, -abs(geneInfo0$GS.DED.treatment));
+geneInfo = geneInfo0[geneOrder, ]
+
+write.csv(geneInfo, file = "DEDtreament_geneInfo.csv")
+
+#Treament related modules, yellow, light yellow, purple
+#Treatment genes in yellow
+module = "yellow"
+column = match(module, modNames);
+moduleGenes = moduleColors==module;
+
+sizeGrWindow(7, 7);
+par(mfrow = c(1,1));
+verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                   abs(geneTraitSignificance[moduleGenes, 1]),
+                   xlab = paste("Module Membership in", module, "module"),
+                   ylab = "Gene significance for DED Removal Treatment",
+                   main = paste("Module membership vs. gene significance\n"),
+                   cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+
+names(datExpr)
+names(datExpr)[moduleColors=="yellow"]
+
+
+#Treatment genes in light yellow module
+module = "lightyellow"
+column = match(module, modNames);
+moduleGenes = moduleColors==module;
+
+sizeGrWindow(7, 7);
+par(mfrow = c(1,1));
+
+verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                   abs(geneTraitSignificance[moduleGenes, 1]),
+                   xlab = paste("Module Membership in", module, "module"),
+                   ylab = "Gene significance for DED Removal Treatment",
+                   main = paste("Module membership vs. gene significance\n"),
+                   cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+
+Treatment_module_lightyellow2of3 <- recordPlot()
+
+#Treatment genes in light yellow module
+module = "purple"
+column = match(module, modNames);
+moduleGenes = moduleColors==module;
+
+sizeGrWindow(7, 7);
+par(mfrow = c(1,1));
+ verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                   abs(geneTraitSignificance[moduleGenes, 1]),
+                   xlab = paste("Module Membership in", module, "module"),
+                   ylab = "Gene significance for DED Removal Treatment",
+                   main = paste("Module membership vs. gene significance\n"),
+                   cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+
+Treatment_module_purple3of3 <- recordPlot()
+
+############# Mother analysis ################ 
+#Define variable mother and check modules with highest association
+Mother = as.data.frame(datTraits$Mother);
+names(Mother) = "Mother"
+# names (colors) of the modules
+modNames = substring(names(MEs), 3)
+
+geneModuleMembership = as.data.frame(cor(datExpr, MEs, use = "p"));
+MMPvalue = as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples));
+
+names(geneModuleMembership) = paste("MM", modNames, sep="");
+names(MMPvalue) = paste("p.MM", modNames, sep="");
+
+geneTraitSignificance = as.data.frame(cor(datExpr, Mother, use = "p"));
+GSPvalue = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples));
+
+names(geneTraitSignificance) = paste("GS.", names(Mother), sep="");
+names(GSPvalue) = paste("p.GS.", names(Mother), sep="");
+
+# Create the starting data frame
+geneInfo0 = data.frame(Genes = probes,
+                       geneSymbol = annot$Note[probes2annot],
+                       moduleColor = moduleColors,
+                       geneTraitSignificance,
+                       GSPvalue)
+#                       LocusLinkID = annot$LocusLinkID[probes2annot],
+
+
+# Order modules by their significance for weight
+modOrder = order(-abs(cor(MEs, Mother, use = "p")));
+# Add module membership information in the chosen order
+for (mod in 1:ncol(geneModuleMembership))
+{
+  oldNames = names(geneInfo0)
+  geneInfo0 = data.frame(geneInfo0, geneModuleMembership[, modOrder[mod]], 
+                         MMPvalue[, modOrder[mod]]);
+  names(geneInfo0) = c(oldNames, paste("MM.", modNames[modOrder[mod]], sep=""),
+                       paste("p.MM.", modNames[modOrder[mod]], sep=""))
+}
+# Order the genes in the geneInfo variable first by module color, then by geneTraitSignificance
+geneOrder = order(geneInfo0$moduleColor, -abs(geneInfo0$GS.Mother));
+geneInfo = geneInfo0[geneOrder, ]
+
+write.csv(geneInfo, file = "Mother_geneInfo.csv")
+
+#Mother associated genes, dark orange
+module = "darkorange"
+column = match(module, modNames);
+moduleGenes = moduleColors==module;
+
+sizeGrWindow(7, 7);
+par(mfrow = c(1,1));
+ verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                   abs(geneTraitSignificance[moduleGenes, 1]),
+                   xlab = paste("Module Membership in", module, "module"),
+                   ylab = "Gene significance for mothers",
+                   main = paste("Module membership vs. gene significance\n"),
+                   cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+
+Mother_module_darkorange <- recordPlot()
+
+############# DED control analysis ################ 
+#Define variable DED and check modules with highest association
+DEDcontrol = as.data.frame(datTraits$DED.control);
+names(DEDcontrol) = "DED.control"
+# names (colors) of the modules
+modNames = substring(names(MEs), 3)
+
+geneModuleMembership = as.data.frame(cor(datExpr, MEs, use = "p"));
+MMPvalue = as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples));
+
+names(geneModuleMembership) = paste("MM", modNames, sep="");
+names(MMPvalue) = paste("p.MM", modNames, sep="");
+
+geneTraitSignificance = as.data.frame(cor(datExpr, DEDcontrol, use = "p"));
+GSPvalue = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples));
+
+names(geneTraitSignificance) = paste("GS.", names(DEDcontrol), sep="");
+names(GSPvalue) = paste("p.GS.", names(DEDcontrol), sep="");
+
+# Create the starting data frame
+geneInfo0 = data.frame(Genes = probes,
+                       geneSymbol = annot$Note[probes2annot],
+                       moduleColor = moduleColors,
+                       geneTraitSignificance,
+                       GSPvalue)
+#                       LocusLinkID = annot$LocusLinkID[probes2annot],
+
+# Order modules by their significance for weight
+modOrder = order(-abs(cor(MEs, DEDcontrol, use = "p")));
+# Add module membership information in the chosen order
+for (mod in 1:ncol(geneModuleMembership))
+{
+  oldNames = names(geneInfo0)
+  geneInfo0 = data.frame(geneInfo0, geneModuleMembership[, modOrder[mod]], 
+                         MMPvalue[, modOrder[mod]]);
+  names(geneInfo0) = c(oldNames, paste("MM.", modNames[modOrder[mod]], sep=""),
+                       paste("p.MM.", modNames[modOrder[mod]], sep=""))
+}
+# Order the genes in the geneInfo variable first by module color, then by geneTraitSignificance
+geneOrder = order(geneInfo0$moduleColor, -abs(geneInfo0$GS.DEDcontrol));
+geneInfo = geneInfo0[geneOrder, ]
+
+write.csv(geneInfo, file = "DEDcontrol_geneInfo.csv")
+
+#DED associated genes, dark orange
+module = "violet"
+column = match(module, modNames);
+moduleGenes = moduleColors==module;
+
+sizeGrWindow(7, 7);
+par(mfrow = c(1,1));
+verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                   abs(geneTraitSignificance[moduleGenes, 1]),
+                   xlab = paste("Module Membership in", module, "module"),
+                   ylab = "Gene significance for DEDs",
+                   main = paste("Module membership vs. gene significance\n"),
+                   cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+
+DED_module_violet <- recordPlot()
+
+############# Regular daughter analysis ################ 
+#Define variable regular daughter and check modules with highest association
+Reg = as.data.frame(datTraits$Reg);
+names(Reg) = "Reg"
+# names (colors) of the modules
+modNames = substring(names(MEs), 3)
+
+geneModuleMembership = as.data.frame(cor(datExpr, MEs, use = "p"));
+MMPvalue = as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples));
+
+names(geneModuleMembership) = paste("MM", modNames, sep="");
+names(MMPvalue) = paste("p.MM", modNames, sep="");
+
+geneTraitSignificance = as.data.frame(cor(datExpr, Reg, use = "p"));
+GSPvalue = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples));
+
+names(geneTraitSignificance) = paste("GS.", names(Reg), sep="");
+names(GSPvalue) = paste("p.GS.", names(Reg), sep="");
+
+# Create the starting data frame
+geneInfo0 = data.frame(Genes = probes,
+                       geneSymbol = annot$Note[probes2annot],
+                       moduleColor = moduleColors,
+                       geneTraitSignificance,
+                       GSPvalue)
+#                       LocusLinkID = annot$LocusLinkID[probes2annot],
+
+# Order modules by their significance for weight
+modOrder = order(-abs(cor(MEs, Reg, use = "p")));
+# Add module membership information in the chosen order
+for (mod in 1:ncol(geneModuleMembership))
+{
+  oldNames = names(geneInfo0)
+  geneInfo0 = data.frame(geneInfo0, geneModuleMembership[, modOrder[mod]], 
+                         MMPvalue[, modOrder[mod]]);
+  names(geneInfo0) = c(oldNames, paste("MM.", modNames[modOrder[mod]], sep=""),
+                       paste("p.MM.", modNames[modOrder[mod]], sep=""))
+}
+# Order the genes in the geneInfo variable first by module color, then by geneTraitSignificance
+geneOrder = order(geneInfo0$moduleColor, -abs(geneInfo0$GS.Reg));
+geneInfo = geneInfo0[geneOrder, ]
+
+write.csv(geneInfo, file = "Reg_geneInfo.csv")
+
+#Reg daughter associated genes, dark orange
+#module = "darkturquoise"
+column = match(module, modNames);
+moduleGenes = moduleColors==module;
+
+sizeGrWindow(7, 7);
+par(mfrow = c(1,1));
+verboseScatterplot(abs(geneModuleMembership[moduleGenes, column]),
+                   abs(geneTraitSignificance[moduleGenes, 1]),
+                   xlab = paste("Module Membership in", module, "module"),
+                   ylab = "Gene significance for regular daughters",
+                   main = paste("Module membership vs. gene significance\n"),
+                   cex.main = 1.2, cex.lab = 1.2, cex.axis = 1.2, col = module)
+
+
+#Heatmap of traits
+#Define numbers of genes and samples
+nGenes = ncol(datExpr);
+nSamples = nrow(datExpr);
+# Recalculate MEs with color labels
+MEs0 = moduleEigengenes(datExpr, moduleColors)$eigengenes
+MEs = orderMEs(MEs0)
+moduleTraitCor = cor(MEs, datTraits, use = "p");
+moduleTraitPvalue = corPvalueStudent(moduleTraitCor, nSamples);
+
+sizeGrWindow(10,6)
+# Will display correlations and their p-values
+textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
+                   signif(moduleTraitPvalue, 1), ")", sep = "");
+dim(textMatrix) = dim(moduleTraitCor)
+par(mar = c(6, 8.5, 3, 3));
+# Display the correlation values within a heatmap plot
+labeledHeatmap(Matrix = moduleTraitCor,
+               xLabels = names(datTraits),
+               yLabels = names(MEs),
+               ySymbols = names(MEs),
+               colorLabels = FALSE,
+               colors = greenWhiteRed(50),
+               textMatrix = textMatrix,
+               setStdMargins = FALSE,
+               cex.text = 0.5,
+               zlim = c(-1,1),
+               main = paste("Module-trait relationships"))
+
+#Create list of hub genes for significant modules
+hubs = chooseTopHubInEachModule(datExpr, moduleColors, power = 6)
+hubs.df <- as.data.frame(hubs)
+hubs.df$colour <- rownames(hubs.df)
+colnames(hubs.df) <- c("ID", "module")
+head(hubs.df)
+
+#Merge with annotation
+hubs.df <- merge(hubs.df, subset(annot, Feature == "gene", by = "ID"))
+hubs.df <- read.csv("WCGNA/hubGenes.csv")
+head(hubs.df)
+hubs.df <- merge(hubs.df, gtf, by = "ID")
+write_csv(hubs.df, "WCGNA/hubGenes.csv")
+
+# Define variable Mother containing
+Mother = as.data.frame(datTraits$Mother);
+names(Mother) = "Mother"
+# names (colors) of the modules
+modNames = substring(names(MEs), 3)
+geneModuleMembership = as.data.frame(cor(datExpr, MEs, use = "p"));
+MMPvalue = as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples));
+names(geneModuleMembership) = paste("MM", modNames, sep="");
+names(MMPvalue) = paste("p.MM", modNames, sep="");
+geneTraitSignificance = as.data.frame(cor(datExpr, Mother, use = "p"));
+GSPvalue = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance), nSamples));
+names(geneTraitSignificance) = paste("GS.", names(Mother), sep="");
+names(GSPvalue) = paste("p.GS.", names(Mother), sep="");
+
+#Network visualization
+
+# Load the expression and trait data saved in the first part
+lnames = load(file = "ProjectName_Part1Data.RData");
+#The variable lnames contains the names of loaded variables.
+lnames
+# Load network data saved in the second part.
+lnames = load(file = "ProjectName_s4_min30_cut20_Part2Data.RData");
+lnames
+
+# Recalculate topological overlap if needed
+#TOM = TOMsimilarityFromExpr(datExpr, power = 6); #use soft power defined previously
+
+#Modules for DEG treatment
+
+####### Network of significant modules in DED treatment ##########
+modules = c("lightyellow", "yellow", "purple", "darkturquoise", "darkorange");
+# Select module probes
+# set probes to gene names from datExpr
+probes = names(datExpr)
+
+# define object "inModule" as just those modules that match the desired module colors invoked by "modules"
+inModule = is.finite(match(moduleColors, modules));
+
+# define object "modProbes" as just those probe names that filter through inModule
+modProbes = probes[inModule];
+
+# assign gene names to those probes that are in the modules of interest
+modGenes = annot$Annotation[match(modProbes, annot$Notes)];
+
+# Select the corresponding Topological Overlap values from the original TOM
+modTOM2 = TOM[inModule, inModule];
+dimnames(modTOM2) = list(modProbes, modProbes)
+
+# Export the network into edge and node list files Cytoscape can read
+Gephi = exportNetworkToCytoscape(modTOM2,
+                                 edgeFile = ("NAME_0.10_edges_04022021.txt"),
+                                 nodeFile = ("NAME_0.10_nodes_04022021.txt"),
+                                 weighted = TRUE,
+                                 threshold = 0.10, #this is another value to play with!
+                                 nodeNames = modProbes,
+                                 altNodeNames = modGenes,
+                                 nodeAttr = moduleColors[inModule])
+
+##Extract genes
+yellowMod1DT <- names(datExpr)[moduleColors=="yellow"]
+yellow <- as.data.frame(yellowMod1DT)
+yellow$module <- "Yellow"
+#yellow <- merge(yellow, gtf)
+write_csv(yellow, "modules/yellow.csv")
+
+bind_rows(yellow, lightYellow, grey60)
+
+lightYellowMod2DT <- names(datExpr)[moduleColors=="lightyellow"]
+lightYellow <- as.data.frame(lightYellowMod2DT)
+lightYellow$module <- "Light Yellow"
+length(lightYellow$lightYellowMod2DT)
+write_csv(lightYellow, "modules/lightYellow.csv")
+
+grey60Mod3DT <- names(datExpr)[moduleColors=="grey60"]
+grey60 <- as.data.frame(grey60Mod3DT)
+grey60$module <- "Grey 60"
+length(grey60$grey60Mod3DT)
+write_csv(grey60, "modules/lightYellow.csv")
+
+purpleMod4DT <- names(datExpr)[moduleColors=="purple"]
+purple <- as.data.frame(purpleMod4DT)
+purple$module <- "Purple"
+length(purple$purpleMod4DT)
+write_csv(purple, "modules/purple.csv")
+
+steelblueMod1M <- names(datExpr)[moduleColors=="steelblue"]
+steelBlue <- as.data.frame(steelblueMod1M)
+steelBlue$module <- "Steel blue"
+length(steelBlue$steelblueMod1M)
+write_csv(steelBlue, "modules/steelBlue.csv")
+
+salmonMod2M <- names(datExpr)[moduleColors=="salmon"]
+salmon <- as.data.frame(salmonMod2M)
+salmon$module <- "Salmon"
+length(salmon$salmonMod2M)
+write_csv(salmon, "modules/salmon.csv")
+
+darkorangeMod3M <- names(datExpr)[moduleColors=="darkorange"]
+darkOrange <- as.data.frame(darkorangeMod3M)
+darkOrange$module <- "Dark orange"
+length(darkOrange$darkorangeMod3M)
+write_csv(darkOrange, "modules/darkOrange.csv")
+#grey60 
+#lightYellow
+
+darkturquoiseMod1DC <- names(datExpr)[moduleColors=="darkturquoise"]
+head(darkturquoiseMod1DC)
+darkTurquoise <- as.data.frame(darkturquoiseMod1DC)
+darkTurquoise$module <- "Dark turqoise"
+length(darkTurquoise$darkturquoiseMod1DC)
+#darkTurquoise <- merge(darkTurquoise, gtf)
+write_csv(darkTurquoise, "modules/darkTurquoise.csv")
+
+saddlebrownMod1R <- names(datExpr)[moduleColors=="saddlebrown"]
+head(saddlebrownMod1R)
+saddleBrown <- as.data.frame(saddlebrownMod1R)
+saddleBrown$module <- "Saddle brown"
+length(saddleBrown$saddlebrownMod1R)
+#saddleBrown <- merge(saddleBrown, gtf)
+write_csv(saddleBrown, "modules/saddleBrown.csv")
+
+blacMod2R <- names(datExpr)[moduleColors=="black"]
+head(blacMod2R)
+black <- as.data.frame(blacMod2R)
+black$module <- "Black"
+length(black$blacMod2R)
+write_csv(black, "modules/black.csv")
+
+turqoiseMod3R <- names(datExpr)[moduleColors=="turquoise"]
+head(turqoiseMod3R)
+turquoise <- as.data.frame(turqoiseMod3R)
+turquoise$module <- "Turquoise"
+length(turquoise$turqoiseMod3R)
+write_csv(turquoise, "modules/turqoise.csv")
+
+darkgreenMod4R <- names(datExpr)[moduleColors=="darkgreen"]
+darkGreen <- as.data.frame(darkgreenMod4R)
+darkGreen$module <- "Dark green"
+length(darkGreen$darkgreenMod4R)
+
+midnightblueMod5R <- names(datExpr)[moduleColors=="midnightblue"]
+midnightBlue <- as.data.frame(midnightblueMod5R)
+midnightBlue$module <- "Midnight blue"
+length(midnightBlue$midnightblueMod5R)
+
+#darktuqoise
+
+name_ID <- function(x){
+  names(x)[1] <- "GeneID" ; x
+  }
+
+#yellow <- name_ID(yellow)
+
+genesModulesSig <-lapply(list(yellow, lightYellow, grey60, purple, steelBlue, salmon, darkOrange, darkTurquoise, saddleBrown, black, turquoise, darkGreen, midnightBlue ), FUN = name_ID)
+
+genesModulesSig <- bind_rows(genesModulesSig)
+
+#genesModulesSig <- bind_rows(yellow, lightYellow, grey60, purple, steelBlue, salmon, darkOrange, darkTurquoise, saddleBrown, black, turquoise, darkGreen, midnightBlue)
+
+write_csv(genesModulesSig, "modules/genesModuleSig2.csv")
+
+
+```
+
+GO terms for DEG in contrasts and WGCNA
+
+```{r}
+
+## GO for DEGs
+
+#Merge go with annotations 
+GOannotation <- read.delim("GOIDs_long.txt", sep="\t", header=TRUE)
+head(GOannotation)
+GOannotation <- as.data.frame(GOannotation)
+GOannotation <- dplyr::rename(GOannotation, ID = SeqName)
+head(GOannotation)
+GOnotes <- read.delim("GOterms_long.txt", sep="\t", head=TRUE)
+head(GOnotes)
+GOnotes <- dplyr::rename(GOnotes, ID=SeqName)
+DEGsig_annot_go <- merge(DEGsig_annot_go, GOnotes, by="ID")
+head(DEGsig_annot_go)
+tail(DEGsig_annot_go)
+
+head(DEGsig)
+DEGsig_annot_go <- merge(DEGsig, GOannotation, by="ID")
+head(DEGsig_annot_go)
+write_csv(as.data.frame(DEGsig_annot_go),"DEGlists/DEGsig_annot_go_long_list.csv")
+
+#Make GO gene list
+geneID2GO <- readMappings(file = "GOIDs_long.txt")
+str(head(geneID2GO))
+
+####
+
+geneUniverse <- names(geneID2GO) 
+head(geneUniverse)
+
+#GO for mother DEGs
+print(M_DEGs)
+M_DEGs_vector <- as.vector(M_DEGs$ID)
+geneList <- factor(as.integer(geneUniverse %in% M_DEGs_vector))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+##################################################################
+
+#########Run for "CC" "MF" and "BP"
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "M_GO2.csv", row.names=FALSE)
+par(cex = 0.9)
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+##############################################################
+
+GOdata <- new("topGOdata", ontology = "CC", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "M_CC2.csv", row.names=FALSE)
+
+GOdata <- new("topGOdata", ontology = "MF", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "M_MF2.csv", row.names=FALSE)
+
+###############################################################################
+
+#GO for Reg DEGs
+
+print(RC_DEGs)
+RC_DEGs_vector <- as.vector(RC_DEGs$ID)
+geneList <- factor(as.integer(geneUniverse %in% RC_DEGs_vector))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+##################################################################
+
+#########Run for "CC" "MF" and "BP"
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "RC_GO2.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+##############################################################
+
+GOdata <- new("topGOdata", ontology = "CC", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "RC_CC2.csv", row.names=FALSE)
+
+GOdata <- new("topGOdata", ontology = "MF", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+whichAlgorithms()
+
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "RC_MF2.csv", row.names=FALSE)
+
+###############################################################################
+
+#GO for DED treatment DEGs
+
+print(DT_DEGs)
+DT_DEGs_vector <- as.vector(DT_DEGs$ID)
+geneList <- factor(as.integer(geneUniverse %in% DT_DEGs_vector))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+##################################################################
+
+#########Run for "CC" "MF" and "BP"
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "DT_GO2.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+##############################################################
+
+GOdata <- new("topGOdata", ontology = "CC", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "DT_CC2.csv", row.names=FALSE)
+
+GOdata <- new("topGOdata", ontology = "MF", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+whichAlgorithms()
+
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "DT_MF2.csv", row.names=FALSE)
+
+###############################################################################
+
+#GO for DED DEGs
+
+print(DC_DEGs)
+DC_DEGs_vector <- as.vector(DC_DEGs$ID)
+geneList <- factor(as.integer(geneUniverse %in% DC_DEGs_vector))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+##################################################################
+
+#########Run for "CC" "MF" and "BP"
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "DC_GO2.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+##############################################################
+
+GOdata <- new("topGOdata", ontology = "CC", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "DC_CC2.csv", row.names=FALSE)
+
+GOdata <- new("topGOdata", ontology = "MF", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+whichAlgorithms()
+
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+GO <- as.list(GOTERM)
+write.csv(allRes, "DC_MF2.csv", row.names=FALSE)
+
+
+##GO enrichment for modules/genes in modules
+#Yellow module (DT 1)
+
+print(yellowMod1DT)
+#yellowMod1DT_vector <- as.vector(yellowMod1DT)
+geneList <- factor(as.integer(geneUniverse %in% yellowMod1DT))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/yellowMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+#Light yellow module (DT 2)
+
+print(lightYellowMod2DT)
+geneList <- factor(as.integer(geneUniverse %in% lightYellowMod2DT))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/lightYellowMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+
+#Grey 60 (DT 3)
+
+print(grey60Mod3DT)
+geneList <- factor(as.integer(geneUniverse %in% grey60Mod3DT))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/grey60.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+#Purple (DT 4)
+
+print(purpleMod4DT)
+geneList <- factor(as.integer(geneUniverse %in% purpleMod4DT))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/purpleMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+#Steel blue (M 1)
+
+print(steelblueMod1M)
+geneList <- factor(as.integer(geneUniverse %in% steelblueMod1M))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/steelBlueMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+#Salmon (M 2)
+
+print(salmonMod2M)
+geneList <- factor(as.integer(geneUniverse %in% salmonMod2M))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/salmonMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+#Dark orang (M 3)
+
+print(darkorangeMod3M)
+geneList <- factor(as.integer(geneUniverse %in% darkorangeMod3M))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/darkOrangeMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+#Dark turqoise (DC 1)
+
+print(darkturquoiseMod1DC)
+geneList <- factor(as.integer(geneUniverse %in% darkturquoiseMod1DC))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/darkturquoiseMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+
+#Saddle brown (R 1)
+
+print(saddlebrownMod1R)
+geneList <- factor(as.integer(geneUniverse %in% saddlebrownMod1R))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/saddleBrownMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+#Black (R 2)
+
+print(blacMod2R)
+geneList <- factor(as.integer(geneUniverse %in% blacMod2R))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/blackMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+#Turquoise (R 3)
+
+print(turqoiseMod3R)
+geneList <- factor(as.integer(geneUniverse %in% turqoiseMod3R))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/turqoiseMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+
+#Dark green (R 4)
+
+print(darkgreenMod4R)
+geneList <- factor(as.integer(geneUniverse %in% darkgreenMod4R))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/darkgreeMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+
+#Midnight blue (R 5)
+
+print(midnightblueMod5R)
+geneList <- factor(as.integer(geneUniverse %in% midnightblueMod5R))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "modules/midnightBlueMod.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+```
+
+
+Comparative blast
+
+```{r}
+##Import blast results
+
+DEGs_Amellifera <-read.delim("comparative/blastnDEGs/blastn_DEGs_Amellifera/blastn.txt")
+colnames(DEGs_Amellifera) <- c("ID", "sseqid", "pident", "lenth", "mismatch", "gapopen", "qstart", "qend", "sstart", "sent", "evalue", "bitscore")
+
+DEGs_Amellifera_sig_65 <- as.data.frame(DEGs_Amellifera)
+length(DEGs_Amellifera_sig_65$ID)
+DEGs_Amellifera_sig_65 <- subset(DEGs_Amellifera_sig_65, pident > 65 )
+length(DEGs_Amellifera_sig_65$ID)
+DEGs_Amellifera_sig_65 <- distinct(DEGs_Amellifera_sig_65, ID, .keep_all = TRUE)
+length(DEGs_Amellifera_sig_65$ID)
+DEGs_Amellifera_sig_65 <- merge(DEGs_Amellifera_sig_65, gtf)
+length(DEGs_Amellifera_sig_65$ID)
+
+M_DEGs_Amellifera <- subset(Amellifera_sig_65, ID %in% M_DEGs$ID)
+M_DEGs_Amellifera$Phenotype <- "M"
+RC_DEGs_Amellifera <- subset(Amellifera_sig_65, ID %in% RC_DEGs$ID)
+RC_DEGs_Amellifera$Phenotype <- "RC"
+write.table(RC_DEGs_Amellifera, file = "blastn_comparative/blastn_DEGs_Amellifera/RC_DEGs_Amellifera.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+DT_DEGs_Amellifera <- subset(Amellifera_sig_65, ID %in% DT_DEGs$ID)
+DT_DEGs_Amellifera$Phenotype <- "DT"
+write.table(DT_DEGs_Amellifera, file = "blastn_comparative/blastn_DEGs_Amellifera/DT_DEGs_Amellifera.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+DC_DEGs_Amellifera <- subset(Amellifera_sig_65, ID %in% DC_DEGs$ID)
+DC_DEGs_Amellifera$Phenotype <- "DC"
+write.table(DC_DEGs_Amellifera, file = "blastn_comparative/blastn_DEGs_Amellifera/DC_DEGs_Amellifera.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+Amellifera_sig_65 <- bind_rows(M_DEGs_Amellifera, RC_DEGs_Amellifera, DC_DEGs_Amellifera, DT_DEGs_Amellifera)
+Amellifera_sig_65 <- pivot_wider(Amellifera_sig_65, names_from = Phenotype, values_from = ID)
+write.csv(Amellifera_sig_65, "Amellifera_sig_65.csv")
+
+
+Bterrestris <- read.delim("blastn_comparative/blastn_DEGs_Bterrestris/blastn.txt", sep = "\t")
+colnames(Bterrestris) <- c("ID", "region","sseqid", "pident", "lenth", "mismatch", "gapopen", "qstart", "qend", "sstart", "sent", "evalue", "bitscore")
+Bterrestris_sig_65 <- as.data.frame(Bterrestris)
+Bterrestris_sig_65 <- subset(Bterrestris_sig_65, pident > 65 )
+length(Bterrestris_sig_65$ID)
+Bterrestris_sig_65 <- distinct(Bterrestris_sig_65, ID, .keep_all = TRUE)
+length(Bterrestris_sig_65$ID)
+Bterrestris_sig_65 <- merge(Bterrestris_sig_65, gtf)
+length(Bterrestris_sig_65$ID)
+
+M_DEGs_Bterrestris <- subset(Bterrestris_sig_65, ID %in% M_DEGs$ID)
+M_DEGs_Bterrestris$Phenotype <- "M"
+write.table(M_DEGs_Bterrestris, file = "blastn_comparative/blastn_DEGs_Bterrestris/M_DEGs_Bterrestris.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+RC_DEGs_Bterrestris <- subset(Bterrestris_sig_65, ID %in% RC_DEGs$ID)
+RC_DEGs_Bterrestris$Phenotype <- "RC"
+write.table(RC_DEGs_Bterrestris, file = "blastn_comparative/blastn_DEGs_Bterrestris/RC_DEGs_Bterrestris.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+DT_DEGs_Bterrestris <- subset(Bterrestris_sig_65, ID %in% DT_DEGs$ID)
+DT_DEGs_Bterrestris$Phenotype <- "DT"
+write.table(DT_DEGs_Bterrestris, file = "blastn_comparative/blastn_DEGs_Bterrestris/DT_DEGs_Bterrestris.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+DC_DEGs_Bterrestris <- subset(Bterrestris_sig_65, ID %in% DC_DEGs$ID)
+DC_DEGs_Bterrestris$Phenotype <- "DC"
+write.table(DC_DEGs_Bterrestris, file = "blastn_comparative/blastn_DEGs_Bterrestris/DC_DEGs_Bterrestris.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+
+Bterrestris_sig_65 <- bind_rows(M_DEGs_Bterrestris, RC_DEGs_Bterrestris, DC_DEGs_Bterrestris, DT_DEGs_Bterrestris)
+Bterrestris_sig_65 <- pivot_wider(Bterrestris_sig_65, names_from = Phenotype, values_from = ID)
+write.csv(Bterrestris_sig_65, "blastn_comparative/blastn_DEGs_Bterrestris/Bterrestris_sig_65.csv")
+
+#Matches to study
+
+Bterrestris_NRW <- read.delim("blastn_comparative/blastn_DEGs_Bterrestris/NRW_gene_list.txt")
+
+M_DEGs_Bterrestris_NRW <- merge(Bterrestris_NRW, M_DEGs_Bterrestris,by.x="sseqid", by.y="sseqid")
+
+M_DEGs_Bterrestris_NRW <- Bterrestris_NRW$sseqid %in% M_DEGs_Bterrestris$sseqid
+
+Caustralensis <- read.delim("blastn_comparative/blastn_DEGs_Caustralensis_local/blastn.txt", sep = "\t")
+colnames(Caustralensis) <- c("ID", "region","sseqid", "pident", "lenth", "mismatch", "gapopen", "qstart", "qend", "sstart", "sent", "evalue", "bitscore")
+Caustralensis_sig_65 <- as.data.frame(Caustralensis)
+Caustralensis_sig_65 <- subset(Caustralensis_sig_65, pident > 65 )
+length(Caustralensis_sig_65$ID)
+Caustralensis_sig_65 <- distinct(Caustralensis_sig_65, ID, .keep_all = TRUE)
+length(Caustralensis_sig_65$ID)
+Caustralensis_sig_65 <- merge(Caustralensis_sig_65, gtf)
+length(Caustralensis_sig_65$ID)
+
+
+M_DEGs_Caustralensis <- subset(Caustralensis_sig_65, ID %in% M_DEGs$ID)
+M_DEGs_Caustralensis$Phenotype <- "M"
+write.table(M_DEGs_Caustralensis, file = "blastn_comparative/blastn_DEGs_Caustralensis_local/M_DEGs_Caustralensis.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+RC_DEGs_Caustralensis <- subset(Caustralensis_sig_65, ID %in% RC_DEGs$ID)
+RC_DEGs_Caustralensis$Phenotype <- "RC"
+write.table(RC_DEGs_Caustralensis, file = "blastn_comparative/blastn_DEGs_Caustralensis_local/RC_DEGs_Caustralensis.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+
+DT_DEGs_Caustralensis <- subset(Caustralensis_sig_65, ID %in% DT_DEGs$ID)
+DT_DEGs_Caustralensis$Phenotype <- "DT"
+write.table(DT_DEGs_Caustralensis, file = "blastn_comparative/blastn_DEGs_Caustralensis_local/DT_DEGs_Caustralensis.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+
+DC_DEGs_Caustralensis <- subset(Caustralensis_sig_65, ID %in% DC_DEGs$ID)
+DC_DEGs_Caustralensis$Phenotype <- "DC"
+write.table(DC_DEGs_Caustralensis, file = "blastn_comparative/blastn_DEGs_Caustralensis_local/DC_DEGs_Caustralensis.txt", sep = "\t",
+            row.names = TRUE, col.names = NA)
+
+Caustralensis_sig_65 <- bind_rows(M_DEGs_Caustralensis, RC_DEGs_Caustralensis, DC_DEGs_Caustralensis, DT_DEGs_Caustralensis)
+Caustralensis_sig_65 <- pivot_wider(Caustralensis_sig_65, names_from = Phenotype, values_from = ID)
+write.csv(Caustralensis_sig_65, "Caustralensis_sig_65.csv")
+
+Caustral_DEGs <- read.delim("blastn_comparative/blastn_DEGs_Caustralensis_local/Caust_Table_S7_DEGs.txt")
+
+M_DEGs_Caustralensis$sseqid %in% Caustral_DEGs$ID
+
+
+Edilemma <- read.delim("blastn_comparative/blastn_DEGs_Edilemma_local/blastn.txt", sep = "\t")
+colnames(Edilemma) <- c("ID", "region","sseqid", "pident", "lenth", "mismatch", "gapopen", "qstart", "qend", "sstart", "sent", "evalue", "bitscore")
+Edilemma_sig_65 <- as.data.frame(Edilemma)
+Edilemma_sig_65 <- subset(Edilemma_sig_65, pident > 65 )
+length(Edilemma_sig_65$ID)
+Edilemma_sig_65 <- distinct(Edilemma_sig_65, ID, .keep_all = TRUE)
+length(Edilemma_sig_65$ID)
+Edilemma_sig_65 <- merge(Edilemma_sig_65, gtf)
+length(Edilemma_sig_65$ID)
+
+M_DEGs_Edilemma <- subset(Edilemma_sig_65, ID %in% M_DEGs$ID)
+M_DEGs_Edilemma$Phenotype <- "M"
+RC_DEGs_Edilemma <- subset(Edilemma_sig_65, ID %in% RC_DEGs$ID)
+RC_DEGs_Edilemma$Phenotype <- "RC"
+DT_DEGs_Edilemma <- subset(Edilemma_sig_65, ID %in% DT_DEGs$ID)
+DT_DEGs_Edilemma$Phenotype <- "DT"
+DC_DEGs_Edilemma <- subset(Edilemma_sig_65, ID %in% DC_DEGs$ID)
+DC_DEGs_Edilemma$Phenotype <- "DC"
+
+Edilemma_sig_65 <- bind_rows(M_DEGs_Edilemma, RC_DEGs_Edilemma, DC_DEGs_Edilemma, DT_DEGs_Edilemma)
+Edilemma_sig_65 <- pivot_wider(Edilemma_sig_65, names_from = Phenotype, values_from = ID)
+write.csv(Edilemma_sig_65, "Edilemma_sig_65.csv")
+
+Fexsecta <- read.delim("blastn_comparative/blastn_DEGs_Fexsecta/blastn.txt", sep = "\t")
+colnames(Fexsecta) <- c("ID", "region","sseqid", "pident", "lenth", "mismatch", "gapopen", "qstart", "qend", "sstart", "sent", "evalue", "bitscore")
+Fexsecta_sig_65 <- as.data.frame(Fexsecta)
+Fexsecta_sig_65 <- subset(Fexsecta_sig_65, pident > 65 )
+length(Fexsecta_sig_65$ID)
+Fexsecta_sig_65 <- distinct(Fexsecta_sig_65, ID, .keep_all = TRUE)
+length(Fexsecta_sig_65$ID)
+Fexsecta_sig_65 <- merge(Fexsecta_sig_65, gtf)
+length(Fexsecta_sig_65$ID)
+
+M_DEGs_Fexsecta <- subset(Fexsecta_sig_65, ID %in% M_DEGs$ID)
+M_DEGs_Fexsecta$Phenotype <- "M"
+RC_DEGs_Fexsecta <- subset(Fexsecta_sig_65, ID %in% RC_DEGs$ID)
+RC_DEGs_Fexsecta$Phenotype <- "RC"
+DT_DEGs_Fexsecta <- subset(Fexsecta_sig_65, ID %in% DT_DEGs$ID)
+DT_DEGs_Fexsecta$Phenotype <- "DT"
+DC_DEGs_Fexsecta <- subset(Fexsecta_sig_65, ID %in% DC_DEGs$ID)
+DC_DEGs_Fexsecta$Phenotype <- "DC"
+
+Fexsecta_sig_65 <- bind_rows(M_DEGs_Fexsecta, RC_DEGs_Fexsecta, DC_DEGs_Fexsecta, DT_DEGs_Fexsecta)
+Fexsecta_sig_65 <- pivot_wider(Fexsecta_sig_65, names_from = Phenotype, values_from = ID)
+write.csv(Fexsecta_sig_65, "Fexsecta_sig_65.csv")
+
+Mgenalis <- read.delim("blastn_comparative/blastn_DEGs_Mgenalis/blastn.txt", sep = "\t")
+colnames(Mgenalis) <- c("ID", "region","sseqid", "pident", "lenth", "mismatch", "gapopen", "qstart", "qend", "sstart", "sent", "evalue", "bitscore")
+Mgenalis_sig_65 <- as.data.frame(Mgenalis)
+Mgenalis_sig_65 <- subset(Mgenalis_sig_65, pident > 65 )
+length(Mgenalis_sig_65$ID)
+Mgenalis_sig_65 <- distinct(Mgenalis_sig_65, ID, .keep_all = TRUE)
+length(Mgenalis_sig_65$ID)
+Mgenalis_sig_65 <- merge(Mgenalis_sig_65, gtf)
+length(Mgenalis_sig_65$ID)
+
+M_DEGs_Mgenalis <- subset(Mgenalis_sig_65, ID %in% M_DEGs$ID)
+M_DEGs_Mgenalis$Phenotype <- "M"
+RC_DEGs_Mgenalis <- subset(Mgenalis_sig_65, ID %in% RC_DEGs$ID)
+RC_DEGs_Mgenalis$Phenotype <- "RC"
+DT_DEGs_Mgenalis <- subset(Mgenalis_sig_65, ID %in% DT_DEGs$ID)
+DT_DEGs_Mgenalis$Phenotype <- "DT"
+DC_DEGs_Mgenalis <- subset(Mgenalis_sig_65, ID %in% DC_DEGs$ID)
+DC_DEGs_Mgenalis$Phenotype <- "DC"
+
+Mgenalis_sig_65 <- bind_rows(M_DEGs_Mgenalis, RC_DEGs_Mgenalis, DC_DEGs_Mgenalis, DT_DEGs_Mgenalis)
+Mgenalis_sig_65 <- pivot_wider(Mgenalis_sig_65, names_from = Phenotype, values_from = ID)
+write.csv(Mgenalis_sig_65, "Mgenalis_sig_65.csv")
+
+Mpharaonis <- read.delim("blastn_comparative/blastn_DEGs_Mpharaonis/blastn.txt", sep = "\t")
+colnames(Mpharaonis) <- c("ID", "region","sseqid", "pident", "lenth", "mismatch", "gapopen", "qstart", "qend", "sstart", "sent", "evalue", "bitscore")
+Mpharaonis_sig_65 <- as.data.frame(Mpharaonis)
+Mpharaonis_sig_65 <- subset(Mpharaonis_sig_65, pident > 65 )
+length(Mpharaonis_sig_65$ID)
+Mpharaonis_sig_65 <- distinct(Mpharaonis_sig_65, ID, .keep_all = TRUE)
+length(Mpharaonis_sig_65$ID)
+Mpharaonis_sig_65 <- merge(Mpharaonis_sig_65, gtf)
+length(Mpharaonis_sig_65$ID)
+
+M_DEGs_Mpharaonis <- subset(Mpharaonis_sig_65, ID %in% M_DEGs$ID)
+M_DEGs_Mpharaonis$Phenotype <- "M"
+RC_DEGs_Mpharaonis <- subset(Mpharaonis_sig_65, ID %in% RC_DEGs$ID)
+RC_DEGs_Mpharaonis$Phenotype <- "RC"
+DT_DEGs_Mpharaonis <- subset(Mpharaonis_sig_65, ID %in% DT_DEGs$ID)
+DT_DEGs_Mpharaonis$Phenotype <- "DT"
+DC_DEGs_Mpharaonis <- subset(Mpharaonis_sig_65, ID %in% DC_DEGs$ID)
+DC_DEGs_Mpharaonis$Phenotype <- "DC"
+
+Mpharaonis_sig_65 <- bind_rows(M_DEGs_Mpharaonis, RC_DEGs_Mpharaonis, DC_DEGs_Mpharaonis, DT_DEGs_Mpharaonis)
+Mpharaonis_sig_65 <- pivot_wider(Mpharaonis_sig_65, names_from = Phenotype, values_from = ID)
+write.csv(Mpharaonis_sig_65, "Mpharaonis_sig_65.csv")
+
+Pmetricus <- read.delim("blastn_comparative/blastn_DEGs_Pmetricus/blastn.txt", sep = "\t")
+colnames(Pmetricus) <- c("ID", "region","sseqid", "pident", "lenth", "mismatch", "gapopen", "qstart", "qend", "sstart", "sent", "evalue", "bitscore")
+Pmetricus_sig_65 <- as.data.frame(Pmetricus)
+Pmetricus_sig_65 <- subset(Pmetricus_sig_65, pident > 65 )
+length(Pmetricus_sig_65$ID)
+Pmetricus_sig_65 <- distinct(Pmetricus_sig_65, ID, .keep_all = TRUE)
+length(Pmetricus_sig_65$ID)
+Pmetricus_sig_65 <- merge(Pmetricus_sig_65, gtf)
+length(Pmetricus_sig_65$ID)
+
+M_DEGs_Pmetricus <- subset(Pmetricus_sig_65, ID %in% M_DEGs$ID)
+M_DEGs_Pmetricus$Phenotype <- "M"
+RC_DEGs_Pmetricus <- subset(Pmetricus_sig_65, ID %in% RC_DEGs$ID)
+RC_DEGs_Pmetricus$Phenotype <- "RC"
+DT_DEGs_Pmetricus <- subset(Pmetricus_sig_65, ID %in% DT_DEGs$ID)
+DT_DEGs_Pmetricus$Phenotype <- "DT"
+DC_DEGs_Pmetricus <- subset(Pmetricus_sig_65, ID %in% DC_DEGs$ID)
+DC_DEGs_Pmetricus$Phenotype <- "DC"
+
+Pmetricus_sig_65 <- bind_rows(M_DEGs_Pmetricus, RC_DEGs_Pmetricus, DT_DEGs_Pmetricus)
+Pmetricus_sig_65 <- pivot_wider(Pmetricus_sig_65, names_from = Phenotype, values_from = ID)
+write.csv(Pmetricus_sig_65, "Pmetricus_sig_65.csv")
+
+Sinvicta <- read.delim("blastn_comparative/blastn_DEGs_Sinvicta/blastn.txt", sep = "\t")
+colnames(Sinvicta) <- c("ID", "region","sseqid", "pident", "lenth", "mismatch", "gapopen", "qstart", "qend", "sstart", "sent", "evalue", "bitscore")
+Sinvicta_sig_65 <- as.data.frame(Sinvicta)
+Sinvicta_sig_65 <- subset(Sinvicta_sig_65, pident > 65 )
+length(Sinvicta_sig_65$ID)
+Sinvicta_sig_65 <- distinct(Sinvicta_sig_65, ID, .keep_all = TRUE)
+length(Sinvicta_sig_65$ID)
+Sinvicta_sig_65 <- merge(Sinvicta_sig_65, gtf)
+length(Sinvicta_sig_65$ID)
+
+M_DEGs_Sinvicta <- subset(Sinvicta_sig_65, ID %in% M_DEGs$ID)
+M_DEGs_Sinvicta$Phenotype <- "M"
+RC_DEGs_Sinvicta <- subset(Sinvicta_sig_65, ID %in% RC_DEGs$ID)
+RC_DEGs_Sinvicta$Phenotype <- "RC"
+DT_DEGs_Sinvicta <- subset(Sinvicta_sig_65, ID %in% DT_DEGs$ID)
+DT_DEGs_Sinvicta$Phenotype <- "DT"
+DC_DEGs_Sinvicta <- subset(Sinvicta_sig_65, ID %in% DC_DEGs$ID)
+DC_DEGs_Sinvicta$Phenotype <- "DC"
+
+Sinvicta_sig_65 <- bind_rows(M_DEGs_Sinvicta, RC_DEGs_Sinvicta, DC_DEGs_Sinvicta, DT_DEGs_Sinvicta)
+Sinvicta_sig_65 <- pivot_wider(Sinvicta_sig_65, names_from = Phenotype, values_from = ID)
+write.csv(Sinvicta_sig_65, "Sinvicta_sig_65.csv")
+
+
+
+### GO enrichment of DEGs shared with different species
+
+###################33A. mellifera
+
+RC_Amellifera <- intersect(RC_DEGs$ID, Amellifera_sig_65$ID)
+RC_Amellifera <- as.data.frame(RC_Amellifera)
+
+#GO for Reg DEGs
+
+#RC_DEGs_Amellifera_vector <- as.vector(RC_DEGs_Amellifera)
+geneList <- factor(as.integer(geneUniverse %in% RC_Amellifera))
+names(geneList) <- geneUniverse
+str(geneList)
+print(geneList)
+
+#########Run for "CC" "MF" and "BP"
+GOdata <- new("topGOdata", description ="TestRun", ontology = "BP", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- sigGenes(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   orderBy = "resultFisher", ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "RC_BP_Amellifera.csv", row.names=FALSE)
+
+showSigOfNodes(GOdata, score(resultFisher), firstSigNodes = 5, useInfo ='all')
+
+length(usedGO(GOdata))
+GOdata
+
+##############################################################
+
+GOdata <- new("topGOdata", ontology = "CC", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "RC_CC.csv", row.names=FALSE)
+
+GOdata <- new("topGOdata", ontology = "MF", allGenes = geneList,
+              annot = annFUN.gene2GO, gene2GO = geneID2GO)
+GOdata
+
+sg <- feasible(GOdata)
+str(sg)
+numSigGenes(GOdata)
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+whichAlgorithms()
+
+resultFisher
+
+###Analysis of results
+
+allRes <- GenTable(GOdata, classicFisher = resultFisher,
+                   ranksOf = "classicFisher", topNodes = 500)
+
+write.csv(allRes, "RC_MF_.csv", row.names=FALSE)
+
+
+```
+
+Comparative gene lists (not final)
+
+
+```{r}
+
+
+#Bterrestris_NRW <- read.delim("blastn_comparative/blastn_DEGs_Bterrestris/NRW_ID.txt")
+#Bterrestris_blast <- read.delim("blastn_comparative/blastn_DEGs_Bterrestris/blastn.txt")
+
+#Bterrestris_NRW_intersect <- merge(Bterrestris_NRW, Bterrestris_blast)
+#Bterrestris_NRW_intersect <- merge(Bterrestris_NRW_intersect, DC_DEGs)
+
+
+
+#top_10 <- top_n(DEGsig, 300, log2FoldChange)
+
+#write.csv(top_10, "top_300.csv")
+
+
+```
+
+Hypergeometric tests and comparative gene lists
+
+```{r}
+
+#Orthologs with C. australensis
+orthoCaustral <- read.delim("comparative/blastn/Caustralensis/Cc_Caust_ortho_list.txt", header = FALSE)
+head(orthoCaustral)
+colnames(orthoCaustral) <- c("ID", "Ca_ID")
+head(orthoCaustral)
+length(unique(orthoCaustral$ID))
+#C. calcarata DEGs orthlogs with C. australensis DEGs
+DEGs_Cc_Ca <- merge(orthoCaustral, DEGsig, by = "ID")
+DEGs_Cc_Ca <- dplyr::select(DEGs_Cc_Ca, ID, Ca_ID, log2FoldChange, contrast)
+head(DEGs_Cc_Ca)
+
+#Compare orthologs with C. australensis DEGs
+DEGs_Caustralensis <- read.delim("comparative/blastn/Caustralensis/DEGs_Caustralensis.txt", header = TRUE)
+head(DEGs_Caustralensis)
+DEGs_Caustralensis <- DEGs_Caustralensis %>% dplyr::select(Ca_ID,Regulation)
+head(DEGs_Caustralensis)
+length(unique(DEGs_Caustralensis$Ca_ID))
+DEGs_Cc_DEGs_Ca <- merge(DEGs_Cc_Ca, DEGs_Caustralensis, by = "Ca_ID")
+head(DEGs_Cc_DEGs_Ca)
+length(unique(DEGs_Cc_DEGs_Ca$Ca_ID))
+length(unique(DEGs_Cc_DEGs_Ca$ID))
+write.csv(DEGs_Cc_DEGs_Ca, "DEGs_Cc_DEGs_Ca.csv")
+
+#Add C. australensis to master list 
+head(DEGs)
+comparativeMaster <- merge(dplyr::select(DEGs_Cc_DEGs_Ca, -log2FoldChange,-contrast), dplyr::select(DEGs,ID,contrast), by = "ID", all = TRUE)
+head(comparativeMaster)
+length(unique(comparativeMaster$ID))
+
+#Hypergeometic test: overlap (overlap, DEGs A, gene universe, DEGs B)
+phyper(270, 1094, 12273, 1589, lower.tail = FALSE)
+
+
+#Orthologs with E. dilemma
+orthoEdilemma <- read.delim("comparative/blastn/Edilemma/Cc_Edel_ortho_list.txt")
+
+head(orthoEdilemma)
+colnames(orthoEdilemma) <- c("ID", "Edil_GeneID")
+head(orthoEdilemma)
+length(unique(orthoEdilemma$Edil_GeneID))
+#C. calcarata DEGs orthologs with E. dilemma DEGs
+DEGs_Cc_Ed <- merge(orthoEdilemma, as.data.frame(DEGsig), by = "ID")
+
+DEGs_Cc_Ed <- dplyr::select(DEGs_Cc_Ed, ID, Edil_GeneID, log2FoldChange, contrast)
+head(DEGs_Cc_Ed)
+
+#Compare orthologs with E. dilemma DEGs
+DEGs_Edilemma <- read.delim("comparative/blastn/Edilemma/DEGs_Edilemma_D_to_S.txt", header = TRUE)
+head(DEGs_Edilemma)
+length(DEGs_Edilemma$Edil_GeneID)
+DEGs_Edilemma <- subset(DEGs_Edilemma, FDR <= 0.05)
+length(DEGs_Edilemma$Edil_GeneID)
+length(unique(DEGs_Edilemma$Edil_GeneID))
+DEGs_Cc_DEGs_Ed <- merge(DEGs_Cc_Ed, DEGs_Edilemma, by = "Edil_GeneID")
+head(DEGs_Cc_DEGs_Ed)
+length(unique(DEGs_Cc_DEGs_Ed$Edil_GeneID))
+head(gtf)
+#DEGs_Cc_DEGs_Ed <- merge(DEGs_Cc_DEGs_Ed, gtf, by = "ID")
+
+
+#Add E. dilemma to master list 
+DEGs_Cc_DEGs_Ed$contrast_Edil <- "D_vs_S"
+comparativeMaster <- merge(comparativeMaster, dplyr::select(DEGs_Cc_DEGs_Ed,ID, Edil_GeneID, contrast_Edil), by = "ID", all = TRUE)
+head(comparativeMaster)
+length(unique(comparativeMaster$ID))
+
+
+phyper(11, 1094, 4407, 204, lower.tail = FALSE)
+
+#Orthologs of old and new genome C. calcarata
+orthoCcalcarata <- read.delim("comparative/blastn/Ccalcarata/Cc_CcalOld_ortho_list.txt", header = FALSE)
+head(orthoCcalcarata)
+colnames(orthoCcalcarata) <- c("ID", "Cc_old_ID")
+head(orthoCcalcarata)
+length(unique(orthoCcalcarata$Cc_old_ID))
+length(unique(orthoCcalcarata$ID))
+DEGs_Cc_Cc <- merge(orthoCcalcarata, DEGsig, by = "ID")
+head(DEGs_Cc_Cc)
+DEGs_Cc_Cc <- dplyr::select(DEGs_Cc_Cc, ID, Cc_old_ID, log2FoldChange, contrast)
+head(DEGs_Cc_Cc)
+
+#Compare hits with previous C. calcarata DEGs, Shell and Rehan, 2019
+DEGs_CcForageGaurdNesting <- read.delim("comparative/blastn/Ccalcarata/DEGs_NestGaurdForagingGaurd.txt")
+head(DEGs_CcForageGaurdNesting)
+length(unique(DEGs_CcForageGaurdNesting$Cc_old_ID))
+DEGs_Cc_DEGs_Cc <- merge(DEGs_Cc_Cc, DEGs_CcForageGaurdNesting, "Cc_old_ID")
+head(DEGs_Cc_DEGs_Cc)
+length(unique(DEGs_Cc_DEGs_Cc$Cc_old_ID))
+length(unique(DEGs_Cc_DEGs_Cc$ID))
+write.csv(DEGs_Cc_DEGs_Cc, "DEGs_Cc_DEGs_Cc.csv")
+
+#Hypergeometic test: overlap (overlap, DEGs A, gene universe, DEGs B)
+phyper(199, 1094, 24057, 1995, lower.tail = FALSE)
+
+#Compare hits of C. calcarata DC, with C. calcarata forager
+head(DC_DEGs_up)
+length(DC_DEGs_up$ID)
+head(orthoCcalcarata)
+DC_DEGs_Ca <- merge(dplyr::select(DC_DEGs_up, ID, contrast), orthoCcalcarata, by  = "ID")
+length(DC_DEGs_up$ID)
+length(unique(DC_DEGs_up$ID))
+head(DC_DEGs_Ca)
+#List of C. calc forager DEGs
+length(subset(DEGs_CcForageGaurdNesting, ))
+length(unique(DEGs_2nd$Ca_ID))
+DC_DEGs_Cc_Ca <- merge(DC_DEGs_Ca, DEGs_2nd, by = "Ca_ID")
+length(DC_DEGs_Cc_Ca$Ca_ID)
+length(unique(DC_DEGs_Cc_Ca$Ca_ID))
+
+#Skip adding to master list, not considered in this paper
+
+phyper(8, 77, 12273, 203, lower.tail = FALSE)
+
+#Number of orthologs A. mellifera
+orthoAmellifera <- read.delim("comparative/blastn/Amellifera/orthologs_Cc_Amellifera.txt")
+head(orthoAmellifera)
+length(unique(orthoAmellifera$Cc_ID))
+length(unique(orthoAmellifera$ID))
+
+#Key for BEEBASE A. millifera and gene IDs
+abstract_record_accession <- read.delim("comparative/blastn/Amellifera/beebase/abstract_record_accession_tab.txt")
+head(abstract_record_accession)
+abstract_record_beebase <- read.delim("comparative/blastn/Amellifera/beebase/abstract_record_beebase_tab.txt")
+head(abstract_record_beebase)
+accession_beebase_key <- merge(abstract_record_accession, abstract_record_beebase, by = "query", all = TRUE)
+head(accession_beebase_key)
+write.csv(accession_beebase_key, "accession_beebase_key.csv")
+
+#Merge key with hits
+orthoAmellifera_beebase <- merge(orthoAmellifera, accession_beebase_key, by = "ID", all = TRUE)
+head(orthoAmellifera_beebase)
+orthoAmellifera_beebase <- dplyr::select(orthoAmellifera_beebase, Cc_ID, beebase, ID, altAccession)
+write.csv(orthoAmellifera_beebase, "comparative/blastn/Amellifera/orthoAmellifera_beebase.csv")
+
+#Compare hits with A. mellifera DEGs
+DEGs_Amellifera <- read.delim("comparative/blastn/Amellifera/DEGS.txt")
+head(DEGs_Amellifera)
+length(DEGs_Amellifera$beebase)
+length(unique(DEGs_Amellifera$beebase))
+
+#Merge DEGs with key
+DEGs_Amellifera <- merge(DEGs_Amellifera, orthoAmellifera_beebase, by = "beebase", all = TRUE)
+head(DEGs_Amellifera)
+length(DEGs_Amellifera$beebase)
+DEGs_Amellifera <- subset(DEGs_Amellifera, regulation == "upForagers" | regulation == "upNurses")
+length(DEGs_Amellifera$beebase)
+length(unique(DEGs_Amellifera$beebase))
+#Merge beebase key with DEGs
+head(DEGs_Amellifera)
+colnames(DEGs_Amellifera) <- c("beebase","log2FoldChange","regulation","ID","accession","altAccession")
+head(DEGs_Amellifera)
+Cc_DEGs_Am_DEGs <- merge(DEGsig, DEGs_Amellifera, by = "ID")
+head(Cc_DEGs_Am_DEGs)
+length(unique(Cc_DEGs_Am_DEGs$ID))
+length(unique(Cc_DEGs_Am_DEGs$beebase))
+
+#Hypergeometic test: overlap (overlap, DEGs A, gene universe, DEGs B)
+phyper(22, 1094, 4763, 1058, lower.tail = FALSE)
+
+#Add A. mellifera to master list
+head(Cc_DEGs_Am_DEGs)
+Cc_DEGs_Am_DEGs <- dplyr::rename(Cc_DEGs_Am_DEGs, contrast_Amel = regulation)
+comparativeMaster <- merge(comparativeMaster, dplyr::select(Cc_DEGs_Am_DEGs, ID, contrast_Amel), by = "ID", all = TRUE)
+head(comparativeMaster)
+length(comparativeMaster$ID)
+
+#Compare orthologs of M. genalis
+orthoMgenalis <- read.delim("comparative/blastn/Mgenalis/hits_paper/seq.ref", header = FALSE)
+head(orthoMgenalis)
+orthoMgenalis <- dplyr::rename(orthoMgenalis, qseqid = V1, sseqid = V2, pident = V3, length = V4, mismatch = V5, gapopen = V6, qstart = V7, qend = V8,sstart = V9, ssend = V10, evalue = V11, biscore = V12)
+orthoMgenalis <- dplyr::select(orthoMgenalis, qseqid, sseqid)
+length(unique(orthoMgenalis$sseqid))
+orthoMgenalis <- dplyr::rename(orthoMgenalis, ID = qseqid, Mgen = sseqid)
+#Merge C. calcarata DEGs with
+DEGs_Cc_Mg <- merge(orthoMgenalis, dplyr::select(DEGsig, ID, contrast), by = "ID")
+head(DEGs_Cc_Mg)
+
+#M. genalis DEGs
+#Import key of contigs and gene ids
+key_contigs_Mgenalis <- read.delim("comparative/blastn/Mgenalis/rbh_Mgencds_Trinity.txt")
+head(key_contigs_Mgenalis)
+key_contigs_Mgenalis <- dplyr::rename(key_contigs_Mgenalis, Contig = Trinity)
+#Import DEGs
+Mgenalis_brain <- read.delim("comparative/blastnDEGs/Mgenalis/Mgenalis_brain.txt")
+head(Mgenalis_brain)
+DEGs_Mgenalis <- dplyr::select(Mgenalis_brain, -rbh_A.melliferaOGSv3.2, -rbh_B.terrestrisBT_transcriptome_v2, -PANTHER_annotation)
+DEGs_Mgenalis <- pivot_longer(DEGs_Mgenalis, !Contig, names_to = "logFC FDR", values_to = "value" )
+head(DEGs_Mgenalis)
+DEGs_Mgenalis$`logFC FDR` <- gsub('.*logFC', 'logFC', DEGs_Mgenalis$`logFC FDR`)
+head(DEGs_Mgenalis)
+DEGs_Mgenalis$`logFC FDR` <- gsub('.*FDR', 'FDR', DEGs_Mgenalis$`logFC FDR`)
+head(DEGs_Mgenalis)
+DEGs_Mgenalis <- subset(DEGs_Mgenalis, `logFC FDR` == "FDR")
+DEGs_Mgenalis <- subset(DEGs_Mgenalis, value < 0.05)
+head(DEGs_Mgenalis)
+length(unique(DEGs_Mgenalis$Contig))
+#Merge M. genalis DEGs with contig-gene ID key
+DEGs_Mgenalis <- merge(dplyr::select(DEGs_Mgenalis, Contig), key_contigs_Mgenalis, by = "Contig")
+head(DEGs_Mgenalis)
+#Merge M. genalis DEGs with orthlogs
+DEGs_Mgenalis <- merge(orthoMgenalis, dplyr::select(DEGs_Mgenalis, Mgen), by = "Mgen")
+head(DEGs_Mgenalis)
+length(unique(DEGs_Mgenalis$Mgen))
+DEGs_Cc_DEGs_Mg <- merge(DEGs_Cc_Mg, DEGs_Mgenalis, by = "ID")
+head(DEGs_Cc_DEGs_Mg)
+length(unique(DEGs_Cc_DEGs_Mg$Mgen.y))
+
+#Hypergeometic test: overlap (overlap, DEGs A, gene universe, DEGs B)
+phyper(19, 1094, 3236, 107, lower.tail = FALSE)
+
+#Add C. australensis to master list
+head(DEGs)
+comparativeMaster <- merge(dplyr::select(DEGs_Cc_DEGs_Ca, -log2FoldChange,-contrast), dplyr::select(DEGs,ID,contrast), by = "ID", all = TRUE)
+head(comparativeMaster)
+
+DEGs_Cc_DEGs_Ed$contrast_Edil <- "D_vs_S"
+comparativeMaster <- merge(comparativeMaster, dplyr::select(DEGs_Cc_DEGs_Ed,ID, Edil_GeneID, contrast_Edil), by = "ID", all = TRUE)
+head(comparativeMaster)
+length(comparativeMaster$ID)
+#Add A. mellifera to master list
+head(Cc_DEGs_Am_DEGs)
+Cc_DEGs_Am_DEGs <- dplyr::rename(Cc_DEGs_Am_DEGs, contrast_Amel = Regulation)
+comparativeMaster <- merge(comparativeMaster, dplyr::select(Cc_DEGs_Am_DEGs, ID, accession, contrast_Amel), by = "ID", all = TRUE)
+head(comparativeMaster)
+length(comparativeMaster$ID)
+head(DEGs_Cc_DEGs_Mg)
+#Add M. genalis to master list
+Mgenalis_brain <- read.delim("comparative/blastnDEGs/Mgenalis/Mgenalis_brain.txt")
+head(Mgenalis_brain)
+DEGs_Mgenalis <- dplyr::select(Mgenalis_brain, -rbh_A.melliferaOGSv3.2, -rbh_B.terrestrisBT_transcriptome_v2, -PANTHER_annotation)
+DEGs_Mgenalis <- pivot_longer(DEGs_Mgenalis, !Contig, names_to = "logFC FDR", values_to = "value" )
+head(DEGs_Mgenalis)
+DEGs_Mgenalis <- cbind(DEGs_Mgenalis, (data.frame(do.call("rbind", strsplit(as.character(DEGs_Mgenalis$`logFC FDR`), "_", fixed = TRUE)))))
+head(DEGs_Mgenalis)
+length(unique(DEGs_Mgenalis$Contig))
+names(DEGs_Mgenalis)[3] <- "value_Mg"
+names(DEGs_Mgenalis)[4] <- "contrast_Mg"
+names(DEGs_Mgenalis)[5] <- "value_type"
+DEGs_Mgenalis <- subset(DEGs_Mgenalis, value_type == "logFC")
+DEGs_Mgenalis <- dplyr::select(DEGs_Mgenalis, Contig, contrast_Mg, value_Mg)
+#Merge M. genalis DEGs with contig-gene ID key
+DEGs_Mgenalis <- merge(DEGs_Mgenalis, key_contigs_Mgenalis, by = "Contig", all = TRUE)
+head(DEGs_Mgenalis)
+DEGs_Mgenalis <- merge(orthoMgenalis, DEGs_Mgenalis, by = "Mgen", all = TRUE)
+head(DEGs_Mgenalis)
+comparativeMaster <- merge(comparativeMaster, dplyr::select(DEGs_Mgenalis, -Contig), by = "ID", all = TRUE)
+length(comparativeMaster$ID)
+#Merge with C. calcarata annotation
+head(comparativeMaster)
+head(gft)
+comparativeMaster <- merge(comparativeMaster, annot)
+
+write.csv(comparativeMaster, "comparativeMaster.csv")
+
+#Merge orthologs for P. metricus with DEGs
+orthoPmetricus <- read.delim("comparative/blastn/Pmetricus/hits_trans/hits.txt", header = FALSE)
+head(orthoPmetricus)
+orthoPmetricus<- dplyr::rename(orthoPmetricus, Cc_ID = V1, Pmet = V2)
+head(orthoPmetricus)
+length(unique(orthoPmetricus$Pmet))
+DEGs_Pmetricus <- read.delim("comparative/blastn/Pmetricus/Workers_up.txt")
+DEGs_Pmetricus <- subset(DEGs_Pmetricus, padj < 0.05)
+head(DEGs_Pmetricus)
+length(unique(DEGs_Pmetricus$Pmet))
+DEGs_Cc_Pm <- merge(dplyr::select(DEGs_Pmetricus, Pmet), orthoPmetricus, by = "Pmet")
+head(DEGs_Cc_Pm)
+length(unique(DEGs_Cc_Pm$Cc_ID))
+head(DEGsig)
+DEGs_Cc_DEGs_Pm <- merge(dplyr::rename(dplyr::select(DEGsig, ID), Cc_ID = ID), DEGs_Cc_Pm, by = "Cc_ID")
+head(DEGs_Cc_DEGs_Pm)
+length(unique(DEGs_Cc_DEGs_Pm$Pmet))
+
+
+#Hypergeometic test: overlap (overlap, DEGs A, gene universe, DEGs B)
+phyper(2, 1094, 1923, 719, lower.tail = FALSE)
+
+
+
+
+
+```
+
+RRHO
+
+```{r}
+
+
+#RRHO for E. dillema, dominant subordinate vs regular daughters DED
+
+#Make the scale go from regular to DED
+DC_RC <- as.data.frame(DC_RC)
+head(DC_RC)
+Cc_RRHO_Ed_RRHO <- merge(orthoEdilemma, DC_RC, by = "ID")
+Cc_RRHO_Ed_RRHO <- dplyr::select(Cc_RRHO_Ed_RRHO, ID, log2FoldChange, Edil_GeneID)
+head(Cc_RRHO_Ed_RRHO)
+length(unique(Cc_RRHO_Ed_RRHO$ID))
+RRHO_Edilemma <- read.delim("comparative/blastn/edilemma/DEGs_Edilemma_D_to_S.txt", header = TRUE)
+RRHO_Edilemma$Regulation <- "D_vs_S"
+RRHO_Edilemma <- dplyr::select(RRHO_Edilemma, Edil_GeneID, logFC)
+head(RRHO_Edilemma) 
+RRHO_master_Cc_Ed <- merge(RRHO_Edilemma, Cc_RRHO_Ed_RRHO, by = "Edil_GeneID")
+length(RRHO_master_Cc_Ed$ID)
+RRHO_master_Cc_Ed <- RRHO_master_Cc_Ed %>% distinct(Edil_GeneID, .keep_all = TRUE)
+head(RRHO_master_Cc_Ed)
+length(RRHO_master_Cc_Ed$ID)
+
+RRHO_Cc_Ed_logCc <- dplyr::select(RRHO_master_Cc_Ed, ID, log2FoldChange)
+write.table(RRHO_Cc_Ed_logCc, "comparative/RRHO/Edilemma/RRHO_Cc_Ed_logCc.txt")
+RRHO_Cc_Ed_logEd <- dplyr::select(RRHO_master_Cc_Ed, ID, logFC)
+write.table(RRHO_Cc_Ed_logEd, "comparative/RRHO/Edilemma/RRHO_Cc_Ed_logEd.txt")
+
+RRHOEdilemmaDomSub <-  RRHO(
+  RRHO_Cc_Ed_logCc, RRHO_Cc_Ed_logEd,
+  stepsize = 10,
+  labels=c("C. calcarata Regular-DED", "E. dilemma Dominant-Subordinate"),
+  alternative='enrichment', 
+  plots = TRUE,
+  outputdir = "comparative/RRHO/Edilemma/test/",
+  BY = TRUE,
+  log10.ind=TRUE)
+
+pval.testing_Edil <- pvalRRHO(RRHOEdilemmaDomSub,50, stepsize=RRHOEdilemmaDomSub$stepsize, FUN=max) 
+summary(pval.testing_Edil)
+
+
+#Compare DED with mother removal with dominant/subordinate E. dilemma
+head(RC_DT)
+length(unique(row.names(RC_DT)))
+DT_RC <- RC_DT
+DT_RC$log2FoldChange <- (RC_DT$log2FoldChange*-1) 
+
+DT_RC <- as.data.frame(DT_RC, header = "FALSE")
+DT_RC$ID <- row.names(DT_RC)
+head(DT_RC)
+Cc_RRHO_Ed_RRHO_DT <- merge(orthoEdilemma, DT_RC, by = "ID")
+Cc_RRHO_Ed_RRHO_DT <- dplyr::select(Cc_RRHO_Ed_RRHO_DT, ID, log2FoldChange, Edil_GeneID)
+head(Cc_RRHO_Ed_RRHO_DT)
+length(unique(Cc_RRHO_Ed_RRHO_DT$ID))
+head(RRHO_Edilemma) 
+RRHO_master_Cc_Ed_DT <- merge(RRHO_Edilemma, Cc_RRHO_Ed_RRHO_DT, by = "Edil_GeneID")
+length(RRHO_master_Cc_Ed_DT$ID)
+RRHO_master_Cc_Ed_DT <- RRHO_master_Cc_Ed_DT %>% distinct(Edil_GeneID, .keep_all = TRUE)
+head(RRHO_master_Cc_Ed_DT)
+length(RRHO_master_Cc_Ed_DT$ID)
+
+RRHO_Cc_Ed_logCc_DT <- dplyr::select(RRHO_master_Cc_Ed_DT, ID, log2FoldChange)
+head(RRHO_Cc_Ed_logCc_DT)
+RRHO_Cc_Ed_logEd_DT <- dplyr::select(RRHO_master_Cc_Ed_DT, ID, logFC)
+
+RRHOEdilemmaDomSub_DT <-  RRHO(
+  RRHO_Cc_Ed_logCc_DT, RRHO_Cc_Ed_logEd_DT,
+  stepsize = 10,
+  labels=c("C. calcarata Regular-DED mother removed", "E. dilemma Dominant-Subordinate"),
+  alternative='enrichment', 
+  plots = TRUE,
+  outputdir = "comparative/RRHO/Edilemma/",
+  BY = TRUE,
+  log10.ind=TRUE)
+
+pval.testing <- pvalRRHO(RRHO.example,50, stepsize=RRHO.example$stepsize, FUN=max) 
+summary(pval.testing)
+
+
+#Merge M. genalis bee base IDs with C. calc bee base key (hits in study)
+head(DC_RC)
+RRHO_DC_RC <- as.data.frame(DC_RC)
+RRHO_DC_RC$ID <- row.names(DC_RC)
+RRHO_DC_RC <- dplyr::select(RRHO_DC_RC, ID, log2FoldChange)
+RRHO_DC_RC <- merge(orthoMgenalis, RRHO_DC_RC, by = "ID")
+head(RRHO_DC_RC)
+head(Mgenalis_brain)
+RRHO_Cc_Mg <- dplyr::select(Mgenalis_brain, Contig, WvsQ_logFC)
+RRHO_Cc_Mg <- merge(RRHO_Cc_Mg, key_contigs_Mgenalis, by = "Contig")
+RRHO_master_Cc_Mg <- merge(RRHO_DC_RC, dplyr::select(RRHO_Cc_Mg,-Contig), by = "Mgen")
+head(RRHO_master_Cc_Mg)
+
+RRHOMgenWorkerQueen <-  RRHO(
+  dplyr::select(RRHO_master_Cc_Mg, ID, log2FoldChange), dplyr::select(RRHO_master_Cc_Mg, ID, WvsQ_logFC),
+  stepsize = 10,
+  labels=c("C. calcarata Regular-DED", "M. genalis Queen-Worker"),
+  alternative='enrichment', 
+  plots = TRUE,
+  outputdir = "comparative/RRHO/Mgenalis/",
+  BY = TRUE,
+  log10.ind=TRUE)
+
+pval.testing <- pvalRRHO(RRHO.example,50, stepsize=RRHO.example$stepsize, FUN=max) 
+summary(pval.testing)
+
+#Merge T. longispinosus bee base IDs with C. calc bee base key (hits in study)
+head(DC_RC)
+RRHO_DC_RC <- as.data.frame(DC_RC)
+RRHO_DC_RC$ID <- row.names(DC_RC)
+RRHO_DC_RC <- dplyr::select(RRHO_DC_RC, ID, log2FoldChange)
+head(RRHO_DC_RC)
+head(orthoTlongi)
+RRHO_Cc_Tl <- merge(dplyr::select(orthoTlongi, -Contig), RRHO_DC_RC, by = "ID")
+head(RRHO_Cc_Tl)
+#Import T. longispinosus data
+Tlongi_Forage_Brood <- read.delim("comparative/blastn/blastn_Tlongispoinosus/caste25122017.txt")
+head(Tlongi_Forage_Brood)
+Tlongi_Forage_Brood <- dplyr::rename(Tlongi_Forage_Brood, Contig = logFC, logFC = logCPM)
+head(Tlongi_Forage_Brood)
+Tlongi_Forage_Brood <- dplyr::select(Tlongi_Forage_Brood, logFC, Contig)
+head(key_contigs_Tlongi)
+Tlongi_Forage_Brood <- merge(Tlongi_Forage_Brood, key_contigs_Tlongi, by = "Contig")
+head(Tlongi_Forage_Brood)
+RRHO_master_Cc_Tl <- merge(dplyr::select(Tlongi_Forage_Brood, -Contig), RRHO_Cc_Tl, by = "Tgen")
+head(RRHO_master_Cc_Tl)
+RRHO_master_Cc_Tl <- distinct(dplyr::select(RRHO_master_Cc_Tl, -Tgen), ID, .keep_all = TRUE)
+length(unique(RRHO_master_Cc_Tl$ID))
+
+RRHOTlongiForageBrood <-  RRHO(
+  dplyr::select(RRHO_master_Cc_Tl, ID, log2FoldChange), dplyr::select(RRHO_master_Cc_Tl, ID, logFC),
+  stepsize = 10,
+  labels=c("C. calcarata Regular-DED", "T. longispinosus Broodcare-Forager"),
+  alternative='enrichment', 
+  plots = TRUE,
+  outputdir = "comparative/RRHO/Tlongispinosus/",
+  BY = TRUE,
+  log10.ind=TRUE)
+
+pval.testing <- pvalRRHO(RRHO.example,50, stepsize=RRHO.example$stepsize, FUN=max) 
+summary(pval.testing)
+
+
+#RRHO for C. australensis
+#Get C. australensis orthlogs
+head(orthoCaustral)
+head(DC_RC)
+RRHO_DC_RC <- as.data.frame(DC_RC)
+RRHO_DC_RC$ID <- row.names(DC_RC)
+RRHO_DC_RC <- dplyr::select(RRHO_DC_RC, ID, log2FoldChange)
+head(RRHO_DC_RC)
+RRHO_Cc_Ca <- merge(RRHO_DC_RC, orthoCaustral, by = "ID")
+length(unique(RRHO_Cc_Ca$Ca_ID))
+length(RRHO_Cc_Ca$ID)
+Caustralensis_2nd <- read.delim("comparative/RRHO/Caustralensis/crosses_combined_feb25_11.txt")
+head(Caustralensis_2nd)
+length(Caustralensis_2nd$Ca_ID)
+Caustralensis_2nd <- dplyr::select(Caustralensis_2nd, Crosses, log_FC, GeneID)
+Caustralensis_2nd <- subset(Caustralensis_2nd, Crosses == "1_vs_2")
+Caustralensis_2nd <- dplyr::rename(Caustralensis_2nd, Ca_ID = GeneID)
+head(Caustralensis_2nd)
+length(unique(Caustralensis_2nd$Ca_ID))
+RRHO_Cc_Ca_master <- merge(dplyr::select(Caustralensis_2nd, log_FC, Ca_ID), RRHO_Cc_Ca, by = "Ca_ID")
+head(RRHO_Cc_Ca_master)
+RRHO_Cc_Ca_master <- distinct(RRHO_Cc_Ca_master, ID, .keep_all = TRUE)
+#RRHO_Cc_Ca_master <- remove_missing(RRHO_Cc_Ca_master)
+#RRHO_Cc_Ca_master <- distinct(RRHO_Cc_Ca_master, ID, .keep_all = TRUE)
+#head(RRHO_Cc_Ca_master)
+
+RRHOCaustralensis <- RRHO(
+  dplyr::select(RRHO_Cc_Ca_master, ID, log_FC), dplyr::select(RRHO_Cc_Ca_master, ID, log2FoldChange),
+  stepsize = 10,
+  labels=c("C. calcarata Regular-DED", "C. australensis Primary-Secondary"),
+  alternative='enrichment', 
+  plots = TRUE,
+  outputdir = "comparative/RRHO/Caustralensis/",
+  BY = TRUE,
+  log10.ind=TRUE)
+
+
+head(gtf)
+
+#Import output of highly and lowly expressed genes
+MostUpDownRegulated <- read.csv("comparative/RRHO/MostUpDownRegulated.csv")
+
+MostUpDownRegulated <- merge(MostUpDownRegulated, gtf, by = "ID")
+write.csv(MostUpDownRegulated, "comparative//RRHO/MostUpDownRegulated-Annotated.csv")
+
+
+
+```
+
