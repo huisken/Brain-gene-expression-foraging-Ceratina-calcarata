@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Brain gene expression and foraging in Ceratina calcarata"
 output: word_document
 editor_options: 
   chunk_output_type: console
