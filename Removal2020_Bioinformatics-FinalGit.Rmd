@@ -9,13 +9,6 @@ Working directory
 
 ```{r setup, include=FALSE}
 
-knitr::opts_knit$set(root.dir="/Volumes/Untitled/jessehuisken/Documents/Academic/Complete/Masters/Removal/")
-#setwd("~/jessehuisken/Documents/Academic/Current/Masters/CCalcarataObservationNests/")
-#setwd("/Users/jessehuisken/Documents/Current/Masters/Removal/")
-setwd("/Volumes/Untitled/jessehuisken/Documents/Academic/Complete/Masters/Removal/")
-#setwd("/Volumes/Untitled/jessehuisken/Documents/Current/Masters/Removal/")
-getwd()
-
 ```
 
 Load packages:
